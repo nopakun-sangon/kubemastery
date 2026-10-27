@@ -105,6 +105,19 @@ class KubeMasteryApp {
         this.closeShareModal();
       }
     });
+
+    // Scroll listener for Floating Back-to-Top button
+    window.addEventListener("scroll", () => {
+      const btn = document.getElementById("back-to-top-btn");
+      if (!btn) return;
+      if (window.scrollY > 300) {
+        btn.classList.remove("opacity-0", "pointer-events-none", "translate-y-4");
+        btn.classList.add("opacity-100", "pointer-events-auto", "translate-y-0");
+      } else {
+        btn.classList.add("opacity-0", "pointer-events-none", "translate-y-4");
+        btn.classList.remove("opacity-100", "pointer-events-auto", "translate-y-0");
+      }
+    }, { passive: true });
   }
 
   openMobileDrawer() {
@@ -151,35 +164,274 @@ class KubeMasteryApp {
       .replace(/"/g, "&quot;");
   }
 
+  formatInlineMarkdown(rawStr) {
+    if (!rawStr) return "";
+    // 1. Extract inline code spans first so inner characters aren't mangled
+    const codePlaceholders = [];
+    let str = String(rawStr).replace(/`([^`]+)`/g, (_, code) => {
+      const idx = codePlaceholders.length;
+      codePlaceholders.push(
+        `<code class="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-cyan-600 dark:text-cyan-300 font-mono text-xs border border-slate-200/70 dark:border-slate-700/70">${this.escapeHtml(code)}</code>`
+      );
+      return `\x00CODE_${idx}\x00`;
+    });
+
+    // 2. Escape HTML on remaining text
+    str = this.escapeHtml(str);
+
+    // 3. Markdown links [text](url)
+    str = str.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+      const cleanUrl = url.replace(/&amp;/g, "&");
+      const isExternal = /^https?:\/\//i.test(cleanUrl);
+      const targetAttr = isExternal ? ' target="_blank" rel="noopener noreferrer"' : "";
+      return `<a href="${cleanUrl}"${targetAttr} class="text-blue-600 dark:text-cyan-400 font-bold underline decoration-blue-400/50 hover:decoration-blue-500">${label}${isExternal ? " ↗" : ""}</a>`;
+    });
+
+    // 4. Bold **text**
+    str = str.replace(/\*\*([^*]+)\*\*/g, '<strong class="text-slate-900 dark:text-white font-bold">$1</strong>');
+
+    // 5. Italic *text*
+    str = str.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em class="italic text-slate-800 dark:text-slate-200">$2</em>');
+
+    // 6. Restore inline code placeholders
+    str = str.replace(/\x00CODE_(\d+)\x00/g, (_, idx) => codePlaceholders[Number(idx)] || "");
+    return str;
+  }
+
   formatMarkdown(text) {
     if (!text) return "";
-    let html = this.escapeHtml(text);
-    // Headings
-    html = html.replace(/^### (.*$)/gim, '<h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-4 mb-2 flex items-center gap-1.5"><span class="text-cyan-500">▶</span> $1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-5 mb-2.5 pb-1 border-b border-slate-200 dark:border-slate-800">$1</h2>');
-    // Blockquotes / Notes
-    html = html.replace(/^> (.*$)/gim, '<blockquote class="p-3.5 my-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border-l-4 border-blue-500 dark:border-cyan-400 text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-medium">$1</blockquote>');
-    // Bold
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="text-blue-600 dark:text-cyan-400 font-bold">$1</strong>');
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-cyan-600 dark:text-cyan-300 font-mono text-xs">$1</code>');
-    // Lists
-    html = html.replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc text-slate-700 dark:text-slate-300 text-xs sm:text-sm my-1">$1</li>');
-    html = html.replace(/^[0-9]\. (.*$)/gim, '<li class="ml-4 list-decimal text-slate-700 dark:text-slate-300 text-xs sm:text-sm my-1">$1</li>');
-    // Paragraphs
-    html = html.replace(/\n\n/g, '<p class="my-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed"></p>');
-    return html;
+
+    // Normalize line endings & fix collapsed single-line tables or alert lines
+    let normalized = String(text)
+      .replace(/\r\n/g, "\n")
+      .replace(/\|\s+\|\s*(?=:?-+:?\s*\|)/g, "|\n| ")
+      .replace(/\|\s+\|\s*(?=[^|\n]+\|)/g, "|\n| ")
+      .replace(/(>\s*\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])\s*>\s*/gi, "$1\n> ");
+
+    const lines = normalized.split("\n");
+    const out = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // 1. Skip empty line
+      if (!trimmed) {
+        i++;
+        continue;
+      }
+
+      // 2. Fenced Code Block ```lang ... ```
+      if (trimmed.startsWith("```")) {
+        const lang = trimmed.slice(3).trim() || "code";
+        const codeLines = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith("```")) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++; // skip closing ```
+        const rawCode = codeLines.join("\n");
+        out.push(`
+          <div class="my-3.5 rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-md">
+            <div class="px-4 py-1.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-[11px]">
+              <span class="font-mono text-cyan-400 uppercase">${this.escapeHtml(lang)}</span>
+              <button onclick='window.app.copyText(${JSON.stringify(rawCode)}, "คัดลอกโค้ดเรียบร้อยแล้ว!")'
+                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold">
+                📋 Copy
+              </button>
+            </div>
+            <pre class="p-4 text-xs font-mono text-emerald-300 overflow-x-auto leading-relaxed">${this.escapeHtml(rawCode)}</pre>
+          </div>
+        `);
+        continue;
+      }
+
+      // 3. Markdown Table (| col1 | col2 |)
+      if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.split("|").length >= 3) {
+        const tableLines = [];
+        while (i < lines.length) {
+          const tLine = lines[i].trim();
+          if (tLine.startsWith("|") && tLine.endsWith("|")) {
+            tableLines.push(tLine);
+            i++;
+          } else {
+            break;
+          }
+        }
+
+        if (tableLines.length >= 2) {
+          const parseRow = (r) =>
+            r
+              .replace(/^\|/, "")
+              .replace(/\|$/, "")
+              .split("|")
+              .map((c) => c.trim());
+
+          const headerCells = parseRow(tableLines[0]);
+          const bodyRows = [];
+          for (let rIdx = 1; rIdx < tableLines.length; rIdx++) {
+            const cells = parseRow(tableLines[rIdx]);
+            // Skip separator row like | :--- | :--- |
+            if (cells.every((c) => /^:?-{2,}:?$/.test(c) || c === "")) continue;
+            bodyRows.push(cells);
+          }
+
+          out.push(`
+            <div class="my-4 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                <thead>
+                  <tr class="bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white font-bold border-b border-slate-200 dark:border-slate-700">
+                    ${headerCells.map((h) => `<th class="px-4 py-3 whitespace-nowrap">${this.formatInlineMarkdown(h)}</th>`).join("")}
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900/60">
+                  ${bodyRows
+                    .map(
+                      (row) => `
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      ${row.map((cell, cIdx) => `<td class="px-4 py-2.5 align-top ${cIdx === 0 ? "font-semibold text-slate-900 dark:text-slate-100" : "text-slate-700 dark:text-slate-300"}">${this.formatInlineMarkdown(cell)}</td>`).join("")}
+                    </tr>
+                  `
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+          `);
+          continue;
+        }
+      }
+
+      // 4. Blockquotes & GitHub Alerts (> [!WARNING], > [!NOTE], etc.)
+      if (trimmed.startsWith(">")) {
+        const quoteLines = [];
+        while (i < lines.length && lines[i].trim().startsWith(">")) {
+          const cleaned = lines[i]
+            .trim()
+            .replace(/^>\s?/, "")
+            .replace(/^>\s?/, "");
+          if (cleaned) quoteLines.push(cleaned);
+          i++;
+        }
+
+        let fullQuote = quoteLines.join("\n").trim();
+        let alertType = null;
+        const alertMatch = fullQuote.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
+        if (alertMatch) {
+          alertType = alertMatch[1].toUpperCase();
+          fullQuote = fullQuote.slice(alertMatch[0].length).replace(/^>\s*/, "").trim();
+        }
+
+        const alertStyles = {
+          NOTE: {
+            box: "bg-blue-50/80 dark:bg-blue-950/40 border-blue-500 dark:border-cyan-400 text-slate-700 dark:text-slate-200",
+            badge: "text-blue-700 dark:text-cyan-300",
+            label: "ℹ️ หมายเหตุ (Note)"
+          },
+          TIP: {
+            box: "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500 text-slate-700 dark:text-slate-200",
+            badge: "text-emerald-700 dark:text-emerald-300",
+            label: "💡 เคล็ดลับ (Tip)"
+          },
+          IMPORTANT: {
+            box: "bg-purple-50/80 dark:bg-purple-950/40 border-purple-500 text-slate-700 dark:text-slate-200",
+            badge: "text-purple-700 dark:text-purple-300",
+            label: "📌 สำคัญ (Important)"
+          },
+          WARNING: {
+            box: "bg-amber-50/90 dark:bg-amber-950/40 border-amber-500 text-slate-800 dark:text-amber-100",
+            badge: "text-amber-700 dark:text-amber-400",
+            label: "⚠️ คำเตือน (Warning)"
+          },
+          CAUTION: {
+            box: "bg-rose-50/90 dark:bg-rose-950/40 border-rose-500 text-slate-800 dark:text-rose-100",
+            badge: "text-rose-700 dark:text-rose-400",
+            label: "🚨 ข้อควรระวัง (Caution)"
+          }
+        };
+
+        const st = (alertType && alertStyles[alertType]) || {
+          box: "bg-blue-50/70 dark:bg-blue-950/30 border-blue-500 dark:border-cyan-400 text-slate-700 dark:text-slate-300",
+          badge: "",
+          label: ""
+        };
+
+        out.push(`
+          <blockquote class="p-4 my-3 rounded-2xl border-l-4 ${st.box} text-xs sm:text-sm leading-relaxed space-y-1.5 shadow-2xs">
+            ${st.label ? `<div class="font-black text-xs uppercase tracking-wider ${st.badge}">${st.label}</div>` : ""}
+            <div>${fullQuote.split("\n").map((l) => this.formatInlineMarkdown(l)).join("<br/>")}</div>
+          </blockquote>
+        `);
+        continue;
+      }
+
+      // 5. Headings (####, ###, ##)
+      if (/^####\s+(.+)/.test(trimmed)) {
+        const hText = trimmed.replace(/^####\s+/, "");
+        out.push(`<h4 class="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 mt-3.5 mb-1.5">${this.formatInlineMarkdown(hText)}</h4>`);
+        i++;
+        continue;
+      }
+      if (/^###\s+(.+)/.test(trimmed)) {
+        const hText = trimmed.replace(/^###\s+/, "");
+        out.push(`<h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-5 mb-2 flex items-center gap-1.5"><span class="text-cyan-500 text-xs">▶</span><span>${this.formatInlineMarkdown(hText)}</span></h3>`);
+        i++;
+        continue;
+      }
+      if (/^##\s+(.+)/.test(trimmed)) {
+        const hText = trimmed.replace(/^##\s+/, "");
+        out.push(`<h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-6 mb-2.5 pb-1.5 border-b border-slate-200 dark:border-slate-800">${this.formatInlineMarkdown(hText)}</h2>`);
+        i++;
+        continue;
+      }
+
+      // 6. Unordered List (* or -)
+      if (/^\s*[*-]\s+(.+)/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^\s*[*-]\s+(.+)/.test(lines[i])) {
+          const isSub = /^\s{2,}[*-]\s+/.test(lines[i]);
+          const itemText = lines[i].replace(/^\s*[*-]\s+/, "").trim();
+          items.push(`<li class="${isSub ? "ml-8 list-[circle]" : "ml-5 list-disc"} text-slate-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed">${this.formatInlineMarkdown(itemText)}</li>`);
+          i++;
+        }
+        out.push(`<ul class="space-y-1.5 my-2.5">${items.join("")}</ul>`);
+        continue;
+      }
+
+      // 7. Ordered List (1. 2. ...)
+      if (/^\s*\d+\.\s+(.+)/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^\s*\d+\.\s+(.+)/.test(lines[i])) {
+          const itemText = lines[i].replace(/^\s*\d+\.\s+/, "").trim();
+          items.push(`<li class="ml-5 list-decimal text-slate-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed">${this.formatInlineMarkdown(itemText)}</li>`);
+          i++;
+        }
+        out.push(`<ol class="space-y-1.5 my-2.5">${items.join("")}</ol>`);
+        continue;
+      }
+
+      // 8. Horizontal rule
+      if (/^---+$/.test(trimmed)) {
+        out.push(`<hr class="my-4 border-slate-200 dark:border-slate-800" />`);
+        i++;
+        continue;
+      }
+
+      // 9. Standard Paragraph
+      out.push(`<p class="my-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">${this.formatInlineMarkdown(trimmed)}</p>`);
+      i++;
+    }
+
+    return out.join("\n");
   }
 
   syncHeaderStats() {
     const state = window.storage.getState();
-    const streakEl = document.getElementById("header-streak-count");
-    const xpEl = document.getElementById("header-xp-count");
     const avatarEl = document.getElementById("header-avatar");
     const nameEl = document.getElementById("header-user-name");
 
-    if (streakEl) streakEl.textContent = state.stats.streak;
-    if (xpEl) xpEl.textContent = `${state.stats.totalXP} XP`;
     if (avatarEl) avatarEl.textContent = state.profile.avatar || "☸️";
     if (nameEl) nameEl.textContent = state.profile.name || "Kubestronaut";
   }
@@ -467,9 +719,9 @@ class KubeMasteryApp {
             <p class="text-[10px] text-slate-400">8 หมวดคู่มือปฏิบัติงาน</p>
           </div>
           <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-            <span class="text-xs text-slate-400 font-bold">คะแนนรวม XP</span>
-            <div class="text-xl sm:text-2xl font-black text-amber-500">${state.stats.totalXP} XP</div>
-            <p class="text-[10px] text-slate-400">Streak ${state.stats.streak} วันต่อเนื่อง 🔥</p>
+            <span class="text-xs text-slate-400 font-bold">CLI Speed Playground</span>
+            <div class="text-xl sm:text-2xl font-black text-amber-500">${(window.cliDrillsData || []).length} โจทย์</div>
+            <p class="text-[10px] text-slate-400">ฝึกพิมพ์คำสั่ง Imperative kubectl</p>
           </div>
         </div>
 
@@ -840,9 +1092,12 @@ class KubeMasteryApp {
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${course.badgeColor.bg} ${course.badgeColor.text} border ${course.badgeColor.border}">
-                ${course.badge}
+                Lessons / ${course.badge}
               </span>
-              <span class="text-xs font-bold text-slate-400">${block.title}</span>
+              <span class="text-slate-400 text-xs">/</span>
+              <span class="text-xs font-bold text-slate-600 dark:text-slate-300">${block.title}</span>
+              <span class="text-slate-400 text-xs">/</span>
+              <span class="text-xs font-mono font-bold text-cyan-600 dark:text-cyan-400">${unit.title}</span>
             </div>
 
             <button onclick="window.app.toggleCompleteUnit('${unit.id}')"
@@ -852,7 +1107,6 @@ class KubeMasteryApp {
                   : 'bg-blue-600 hover:bg-blue-500 text-white shadow'
               }">
               <span>${isUnitDone ? '✅ อ่านจบแล้ว (Completed)' : '🎯 กดทำเครื่องหมายว่าอ่านจบแล้ว'}</span>
-              <span class="text-[10px] text-amber-300 font-black">+15 XP</span>
             </button>
           </div>
 
@@ -981,7 +1235,6 @@ class KubeMasteryApp {
               <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <span>🎯 คำถามทบทวนความเข้าใจท้ายบท (Quick Check)</span>
               </h3>
-              <span class="text-xs font-bold text-amber-500">+10 XP</span>
             </div>
 
             <p class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
@@ -1066,7 +1319,7 @@ class KubeMasteryApp {
     const isDone = window.storage.toggleUnitCompletion(unitId);
     if (isDone) {
       if (window.soundFx && window.soundFx.playCelebration) window.soundFx.playCelebration();
-      this.showToast("🎉 ยินดีด้วย! คุณเรียนจบบทนี้แล้ว (+15 XP)", "success");
+      this.showToast("✅ บันทึกสถานะเรียนจบบทนี้แล้ว", "success");
     } else {
       this.showToast("ยกเลิกสถานะเรียนจบแล้ว", "info");
     }
@@ -1090,7 +1343,7 @@ class KubeMasteryApp {
     window.storage.recordUnitQuizAnswer(unitId, selectedOption, isCorrect);
     if (isCorrect) {
       if (window.soundFx && window.soundFx.playCorrect) window.soundFx.playCorrect();
-      this.showToast("🎉 ตอบถูกต้อง! (+10 XP)", "success");
+      this.showToast("🎉 ตอบถูกต้อง!", "success");
     } else {
       if (window.soundFx && window.soundFx.playWrong) window.soundFx.playWrong();
       this.showToast("ยังไม่ถูกต้อง ลองอ่านเฉลยดูนะครับ", "error");
@@ -1446,17 +1699,45 @@ class KubeMasteryApp {
     const currentIndex = pages.findIndex(p => p.id === page.id);
     const prevPage = currentIndex > 0 ? pages[currentIndex - 1] : null;
     const nextPage = currentIndex >= 0 && currentIndex < pages.length - 1 ? pages[currentIndex + 1] : null;
+    const catClean = page.categoryTitle.replace(/\s*\([^)]*\)/g, '').trim();
 
     return `
-      <article class="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-800 shadow-sm space-y-7">
+      <article class="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-10 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <!-- Top Pagination (Previous / Next Article) -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+          ${prevPage ? `
+            <button onclick="window.app.${docType === 'concepts' ? 'openConceptPage' : 'openTaskPage'}('${prevPage.id}')"
+              class="w-full sm:w-auto px-3.5 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 flex items-center gap-2.5 text-left transition-all group">
+              <span class="text-base text-slate-400 group-hover:-translate-x-1 transition-transform">←</span>
+              <div class="min-w-0">
+                <div class="text-[9px] text-slate-400 uppercase font-bold tracking-wider">PREVIOUS</div>
+                <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[200px] sm:max-w-[240px]">${prevPage.titleEn}</div>
+              </div>
+            </button>
+          ` : '<div></div>'}
+
+          ${nextPage ? `
+            <button onclick="window.app.${docType === 'concepts' ? 'openConceptPage' : 'openTaskPage'}('${nextPage.id}')"
+              class="w-full sm:w-auto px-3.5 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-2.5 text-right transition-all group sm:ml-auto">
+              <div class="min-w-0">
+                <div class="text-[9px] text-slate-400 uppercase font-bold tracking-wider">NEXT</div>
+                <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[200px] sm:max-w-[240px]">${nextPage.titleEn}</div>
+              </div>
+              <span class="text-base text-slate-400 group-hover:translate-x-1 transition-transform">→</span>
+            </button>
+          ` : '<div></div>'}
+        </div>
+
         <!-- Top Breadcrumb & Share Header -->
         <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-3">
-          <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+          <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
             <span class="px-2.5 py-0.5 rounded-full text-[11px] font-black border ${badgeColor}">
               ${badgeLabel}
             </span>
             <span>/</span>
-            <span class="font-bold text-slate-700 dark:text-slate-300">${page.categoryTitle.replace(/\s*\([^)]*\)/g, '').trim()}</span>
+            <span class="font-bold text-slate-700 dark:text-slate-300">${catClean}</span>
+            <span>/</span>
+            <span class="font-mono font-bold text-cyan-600 dark:text-cyan-400">Official Title: ${page.titleEn}</span>
           </div>
 
           <div class="flex items-center gap-2">
@@ -1482,11 +1763,11 @@ class KubeMasteryApp {
             ${page.titleTh}
           </h1>
           <div class="text-xs sm:text-sm font-mono text-cyan-600 dark:text-cyan-400">
-            Official Title: ${page.titleEn}
+            ${badgeLabel} / ${catClean} / Official Title: ${page.titleEn}
           </div>
           ${page.lead ? `
             <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800/80 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-              ${this.escapeHtml(page.lead)}
+              ${this.formatMarkdown(page.lead)}
             </div>
           ` : ''}
         </div>
@@ -1538,12 +1819,14 @@ class KubeMasteryApp {
                   <span>${sec.headingTh}</span>
                 </h2>
                 <a href="#${sec.id}" onclick="window.app.copyText(window.location.origin + window.location.pathname + window.location.hash + '?section=${sec.id}', 'คัดลอกลิงก์ตรงไปยังหัวข้อนี้แล้ว!'); return false;"
-                  class="text-xs text-slate-400 hover:text-blue-500 dark:hover:text-cyan-400 font-mono" title="คัดลอกลิงก์ตรงไปยังหัวข้อนี้">
+                  class="text-xs text-slate-400 hover:text-blue-500 dark:hover:text-cyan-400 font-mono shrink-0" title="คัดลอกลิงก์ตรงไปยังหัวข้อนี้">
                   # Link
                 </a>
               </div>
-              <div class="text-xs text-slate-400 font-mono">
-                ${sec.headingEn}
+              <div class="text-xs text-slate-400 dark:text-slate-400 font-mono flex flex-wrap items-center gap-1.5">
+                <span class="text-slate-500">${badgeLabel} / ${catClean} / Official Title: ${page.titleEn}</span>
+                <span>•</span>
+                <span class="text-cyan-600 dark:text-cyan-400 font-semibold">${sec.headingEn}</span>
               </div>
 
               <!-- Content Markdown -->
@@ -1747,11 +2030,9 @@ class KubeMasteryApp {
       if (window.soundFx && window.soundFx.playCorrect) window.soundFx.playCorrect();
       feedback.innerHTML = `
         <div class="p-4 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs font-mono">
-          🎉 ถูกต้องยอดเยี่ยม! คำสั่งของคุณทำงานได้ตามเป้าหมาย (+10 XP)
+          🎉 ถูกต้องยอดเยี่ยม! คำสั่งของคุณทำงานได้ตามเป้าหมาย
         </div>
       `;
-      window.storage.addXP(10);
-      this.syncHeaderStats();
     } else {
       if (window.soundFx && window.soundFx.playWrong) window.soundFx.playWrong();
       feedback.innerHTML = `
@@ -1815,6 +2096,12 @@ class KubeMasteryApp {
   // ===========================================================================
   renderProfileView() {
     const state = window.storage.getState();
+    const courses = window.courseData || [];
+    let totalUnits = 0;
+    courses.forEach(c => (c.blocks || []).forEach(b => { totalUnits += (b.units || []).length; }));
+    const completedUnits = (state.completedUnits || []).length;
+    const passedQuizzes = Object.values(state.unitQuizHistory || {}).filter(q => q && q.correct).length;
+
     return `
       <div class="space-y-8 animate-fadeIn max-w-3xl mx-auto w-full pb-16">
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
@@ -1834,12 +2121,12 @@ class KubeMasteryApp {
 
           <div class="grid grid-cols-2 gap-4 text-xs">
             <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-              <div class="text-slate-400">Total Experience</div>
-              <div class="text-xl font-black text-blue-600 dark:text-cyan-400 mt-1">${state.stats.totalXP} XP</div>
+              <div class="text-slate-400">บทเรียนที่อ่านจบแล้ว</div>
+              <div class="text-xl font-black text-blue-600 dark:text-cyan-400 mt-1">${completedUnits} / ${totalUnits} บท</div>
             </div>
             <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-              <div class="text-slate-400">Streak ต่อเนื่อง</div>
-              <div class="text-xl font-black text-amber-500 mt-1">${state.stats.streak} วัน 🔥</div>
+              <div class="text-slate-400">แบบทดสอบท้ายบทที่ผ่าน</div>
+              <div class="text-xl font-black text-emerald-500 mt-1">${passedQuizzes} ข้อ ✓</div>
             </div>
           </div>
 
