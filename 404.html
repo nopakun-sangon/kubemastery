@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>KubeMastery Redirecting...</title>
+  <script>
+    // Single Page Apps redirect for GitHub Pages / Static Hosting
+    (function() {
+      var path = window.location.pathname;
+      var repoBase = "/";
+      var segments = path.split('/').filter(Boolean);
+      // If deployed in a subdirectory like /KubeMastery/ or /learn-kube/
+      var route = path;
+      if (segments.length > 0 && (segments[0].toLowerCase() === 'learn-kube' || segments[0].toLowerCase() === 'kubemastery')) {
+        repoBase = '/' + segments[0] + '/';
+        route = '/' + segments.slice(1).join('/');
+      }
+      var cleanRoute = route.replace(/^\//, '');
+      var target = repoBase + (cleanRoute ? '#/' + cleanRoute : '') + window.location.search + window.location.hash;
+      window.location.replace(target);
+    })();
+  </script>
+</head>
+<body>
+  <p>Redirecting to KubeMastery...</p>
+</body>
+</html>
+

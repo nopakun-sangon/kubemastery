@@ -1,0 +1,58 @@
+<svg viewBox="0 0 840 400" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+      
+  <style>
+    .bg { fill: #0f172a; rx: 16; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .card-hl { fill: #1e3a8a; stroke: #3b82f6; stroke-width: 2; rx: 12; }
+    .card-cp { fill: #312e81; stroke: #6366f1; stroke-width: 2; rx: 12; }
+    .card-worker { fill: #064e3b; stroke: #10b981; stroke-width: 2; rx: 12; }
+    .text-title { fill: #f8fafc; font-family: system-ui, sans-serif; font-size: 18px; font-weight: bold; }
+    .text-sub { fill: #94a3b8; font-family: system-ui, sans-serif; font-size: 13px; }
+    .text-body { fill: #e2e8f0; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; }
+    .text-code { fill: #38bdf8; font-family: monospace; font-size: 13px; }
+    .text-badge { fill: #38bdf8; font-family: system-ui, sans-serif; font-size: 11px; font-weight: bold; }
+    .arrow { stroke: #64748b; stroke-width: 2; marker-end: url(#arrowhead); fill: none; }
+    .arrow-hl { stroke: #38bdf8; stroke-width: 2.5; marker-end: url(#arrowhead-hl); fill: none; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-hl" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+      <rect width="840" height="400" class="bg"/>
+      <text x="420" y="40" text-anchor="middle" class="text-title">Pod Scheduling: Filtering, Scoring, Affinity &amp; Taints</text>
+      <text x="420" y="65" text-anchor="middle" class="text-sub">How kube-scheduler picks the best node for new Pods</text>
+
+      <!-- New Pod -->
+      <rect x="50" y="140" width="170" height="100" class="card-hl"/>
+      <text x="135" y="175" text-anchor="middle" class="text-body">New Pod</text>
+      <text x="135" y="200" text-anchor="middle" class="text-code">nodeName: ""</text>
+      <text x="135" y="220" text-anchor="middle" class="text-sub">affinity / tolerations</text>
+
+      <!-- Scheduler Filter & Score -->
+      <rect x="290" y="120" width="220" height="140" class="card-cp"/>
+      <text x="400" y="155" text-anchor="middle" class="text-body" fill="#a5b4fc">kube-scheduler</text>
+      <text x="400" y="185" text-anchor="middle" class="text-sub">1. Filtering (Predicates)</text>
+      <text x="400" y="205" text-anchor="middle" class="text-sub">2. Scoring (Priorities)</text>
+      <text x="400" y="235" text-anchor="middle" class="text-code">Select Highest Score</text>
+
+      <!-- Node Options -->
+      <rect x="580" y="100" width="200" height="65" class="card" stroke="#ef4444"/>
+      <text x="680" y="125" text-anchor="middle" class="text-sub" fill="#f87171">Node 1: Tainted (NoSchedule)</text>
+      <text x="680" y="148" text-anchor="middle" class="text-sub">Filtered Out ✗</text>
+
+      <rect x="580" y="180" width="200" height="65" class="card-worker"/>
+      <text x="680" y="205" text-anchor="middle" class="text-body" fill="#6ee7b7">Node 2: SSD (Score 95)</text>
+      <text x="680" y="228" text-anchor="middle" class="text-code">Pod Assigned! ✓</text>
+
+      <rect x="580" y="260" width="200" height="65" class="card"/>
+      <text x="680" y="285" text-anchor="middle" class="text-sub">Node 3: HDD (Score 60)</text>
+      <text x="680" y="308" text-anchor="middle" class="text-sub">Lower priority</text>
+
+      <path d="M 220 190 L 290 190" class="arrow-hl"/>
+      <path d="M 510 190 L 580 205" class="arrow-hl"/>
+    </svg>

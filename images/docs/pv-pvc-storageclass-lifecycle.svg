@@ -1,0 +1,55 @@
+<svg viewBox="0 0 860 400" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+      
+  <style>
+    .bg { fill: #0f172a; rx: 16; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .card-hl { fill: #1e3a8a; stroke: #3b82f6; stroke-width: 2; rx: 12; }
+    .card-cp { fill: #312e81; stroke: #6366f1; stroke-width: 2; rx: 12; }
+    .card-worker { fill: #064e3b; stroke: #10b981; stroke-width: 2; rx: 12; }
+    .text-title { fill: #f8fafc; font-family: system-ui, sans-serif; font-size: 18px; font-weight: bold; }
+    .text-sub { fill: #94a3b8; font-family: system-ui, sans-serif; font-size: 13px; }
+    .text-body { fill: #e2e8f0; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; }
+    .text-code { fill: #38bdf8; font-family: monospace; font-size: 13px; }
+    .text-badge { fill: #38bdf8; font-family: system-ui, sans-serif; font-size: 11px; font-weight: bold; }
+    .arrow { stroke: #64748b; stroke-width: 2; marker-end: url(#arrowhead); fill: none; }
+    .arrow-hl { stroke: #38bdf8; stroke-width: 2.5; marker-end: url(#arrowhead-hl); fill: none; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-hl" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+      <rect width="860" height="400" class="bg"/>
+      <text x="430" y="40" text-anchor="middle" class="text-title">PersistentVolume &amp; StorageClass Binding Lifecycle</text>
+      <text x="430" y="65" text-anchor="middle" class="text-sub">Decoupling Storage Administration from Pod Consumption</text>
+
+      <!-- Pod -->
+      <rect x="50" y="140" width="170" height="100" class="card-hl"/>
+      <text x="135" y="180" text-anchor="middle" class="text-body">Application Pod</text>
+      <text x="135" y="205" text-anchor="middle" class="text-sub">claimName: my-pvc</text>
+
+      <!-- PVC -->
+      <rect x="290" y="130" width="210" height="120" class="card-cp"/>
+      <text x="395" y="165" text-anchor="middle" class="text-body" fill="#a5b4fc">PersistentVolumeClaim</text>
+      <text x="395" y="190" text-anchor="middle" class="text-code">requests: 10Gi</text>
+      <text x="395" y="215" text-anchor="middle" class="text-sub">accessModes: ReadWriteOnce</text>
+
+      <!-- PV -->
+      <rect x="570" y="130" width="230" height="120" class="card-worker"/>
+      <text x="685" y="165" text-anchor="middle" class="text-body" fill="#6ee7b7">PersistentVolume</text>
+      <text x="685" y="190" text-anchor="middle" class="text-code">capacity: 10Gi (Bound)</text>
+      <text x="685" y="215" text-anchor="middle" class="text-sub">Reclaim: Retain / Delete</text>
+
+      <!-- StorageClass Dynamic -->
+      <rect x="420" y="280" width="270" height="75" class="card" stroke="#f59e0b"/>
+      <text x="555" y="310" text-anchor="middle" class="text-body" fill="#fbbf24">StorageClass (Dynamic Provisioner)</text>
+      <text x="555" y="335" text-anchor="middle" class="text-sub">Auto-creates PV from cloud disk</text>
+
+      <path d="M 220 190 L 290 190" class="arrow-hl"/>
+      <path d="M 500 190 L 570 190" class="arrow-hl"/>
+      <path d="M 395 250 L 420 285" class="arrow" stroke="#f59e0b"/>
+    </svg>

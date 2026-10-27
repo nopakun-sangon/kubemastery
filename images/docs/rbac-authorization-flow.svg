@@ -1,0 +1,50 @@
+<svg viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+      
+  <style>
+    .bg { fill: #0f172a; rx: 16; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .card-hl { fill: #1e3a8a; stroke: #3b82f6; stroke-width: 2; rx: 12; }
+    .card-cp { fill: #312e81; stroke: #6366f1; stroke-width: 2; rx: 12; }
+    .card-worker { fill: #064e3b; stroke: #10b981; stroke-width: 2; rx: 12; }
+    .text-title { fill: #f8fafc; font-family: system-ui, sans-serif; font-size: 18px; font-weight: bold; }
+    .text-sub { fill: #94a3b8; font-family: system-ui, sans-serif; font-size: 13px; }
+    .text-body { fill: #e2e8f0; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; }
+    .text-code { fill: #38bdf8; font-family: monospace; font-size: 13px; }
+    .text-badge { fill: #38bdf8; font-family: system-ui, sans-serif; font-size: 11px; font-weight: bold; }
+    .arrow { stroke: #64748b; stroke-width: 2; marker-end: url(#arrowhead); fill: none; }
+    .arrow-hl { stroke: #38bdf8; stroke-width: 2.5; marker-end: url(#arrowhead-hl); fill: none; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-hl" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+      <rect width="820" height="380" class="bg"/>
+      <text x="410" y="40" text-anchor="middle" class="text-title">Kubernetes RBAC Authorization Architecture</text>
+      <text x="410" y="65" text-anchor="middle" class="text-sub">Subjects (Users/ServiceAccounts) bound to Roles with Permissions</text>
+
+      <!-- Subject -->
+      <rect x="60" y="120" width="190" height="110" class="card-hl"/>
+      <text x="155" y="155" text-anchor="middle" class="text-body">Subject (Who)</text>
+      <text x="155" y="180" text-anchor="middle" class="text-sub">User: "alice"</text>
+      <text x="155" y="205" text-anchor="middle" class="text-code">ServiceAccount: "app-sa"</text>
+
+      <!-- Binding -->
+      <rect x="310" y="120" width="200" height="110" class="card-cp"/>
+      <text x="410" y="155" text-anchor="middle" class="text-body" fill="#a5b4fc">RoleBinding</text>
+      <text x="410" y="180" text-anchor="middle" class="text-sub">Maps Subject -> Role</text>
+      <text x="410" y="205" text-anchor="middle" class="text-sub">(ClusterRoleBinding)</text>
+
+      <!-- Role -->
+      <rect x="570" y="120" width="190" height="110" class="card-worker"/>
+      <text x="665" y="155" text-anchor="middle" class="text-body" fill="#6ee7b7">Role / ClusterRole</text>
+      <text x="665" y="180" text-anchor="middle" class="text-sub">resources: ["pods"]</text>
+      <text x="665" y="205" text-anchor="middle" class="text-code">verbs: ["get", "list"]</text>
+
+      <path d="M 250 175 L 310 175" class="arrow-hl"/>
+      <path d="M 510 175 L 570 175" class="arrow-hl"/>
+    </svg>

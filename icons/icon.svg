@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="k8sGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#326ce5" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#k8sGrad)" />
+  <polygon points="256,68 418,146 458,320 346,454 166,454 54,320 94,146" fill="none" stroke="#ffffff" stroke-width="24" stroke-linejoin="round" opacity="0.95"/>
+  <circle cx="256" cy="266" r="88" fill="none" stroke="#ffffff" stroke-width="24"/>
+  <circle cx="256" cy="266" r="28" fill="#ffffff"/>
+  <!-- 7 Helm Spokes -->
+  <line x1="256" y1="126" x2="256" y2="238" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+  <line x1="365" y1="179" x2="278" y2="248" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+  <line x1="392" y1="297" x2="284" y2="272" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+  <line x1="316" y1="392" x2="268" y2="292" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+  <line x1="196" y1="392" x2="244" y2="292" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+  <line x1="120" y1="297" x2="228" y2="272" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+  <line x1="147" y1="179" x2="234" y2="248" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+</svg>
+

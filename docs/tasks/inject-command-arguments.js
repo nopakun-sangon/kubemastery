@@ -1,0 +1,96 @@
+/**
+ * Official Kubernetes Documentation Translation (Full Content)
+ * Source: https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/
+ */
+(function (root) {
+  const pageData = {
+  "id": "inject-command-arguments",
+  "categoryId": "inject-data",
+  "categoryTitle": "Inject Data Into Applications",
+  "titleEn": "Define a Command and Arguments for a Container",
+  "titleTh": "การกำหนด Command และ Arguments ให้กับคอนเทนเนอร์",
+  "officialUrl": "https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/",
+  "docsPath": "/docs/tasks/inject-data-application/define-command-argument-container/",
+  "lead": "การกำหนดหรือเขียนทับ (Override) คำสั่งเริ่มต้นและอาร์กิวเมนต์ที่ถูกระบุไว้ใน Container Image ช่วยให้ปรับแต่งพฤติกรรมการทำงานของแอปพลิเคชันได้อย่างยืดหยุ่นโดยไม่ต้อง Build Image ใหม่",
+  "sections": [
+    {
+      "id": "command-args-docker-mapping",
+      "headingEn": "Mapping Kubernetes command and args to Docker ENTRYPOINT and CMD",
+      "headingTh": "การเปรียบเทียบคำสั่งระหว่าง Kubernetes (command/args) กับ Dockerfile (ENTRYPOINT/CMD)",
+      "contentMarkdown": "เมื่อรันคอนเทนเนอร์ใน Kubernetes คุณสามารถกำหนดคำสั่งและอาร์กิวเมนต์ได้ผ่านฟิลด์ `command` และ `args` ใน Container Specification ซึ่งจะเข้าไปแทนที่คำสั่งที่กำหนดไว้ใน Dockerfile ดังนี้:\n\n* **`command` ใน Kubernetes** จะเข้าไปเขียนทับ **`ENTRYPOINT`** ของ Dockerfile\n* **`args` ใน Kubernetes** จะเข้าไปเขียนทับ **`CMD`** ของ Dockerfile\n\n### ตารางพฤติกรรมการทำงานร่วมกัน:\n1. **ไม่ระบุทั้ง command และ args**: จะใช้ค่าเริ่มต้นทั้ง `ENTRYPOINT` และ `CMD` จาก Container Image\n2. **ระบุเฉพาะ command**: จะใช้ `command` ของ Kubernetes และละทิ้งทั้ง `ENTRYPOINT` และ `CMD` เดิมในอิมเมจ\n3. **ระบุเฉพาะ args**: จะใช้ `ENTRYPOINT` เดิมจากอิมเมจ แต่แทนที่อาร์กิวเมนต์ด้วย `args` ที่ระบุใหม่\n4. **ระบุทั้ง command และ args**: จะละทิ้งทั้ง `ENTRYPOINT` และ `CMD` เดิม และใช้ค่าใหม่ทั้งหมดจาก Kubernetes",
+      "codeBlocks": []
+    },
+    {
+      "id": "defining-command-and-args",
+      "headingEn": "Defining Command and Arguments in Pod Manifest",
+      "headingTh": "การกำหนด Command และ Arguments ใน Pod Manifest",
+      "contentMarkdown": "ตัวอย่างการสร้างพอดที่สั่งรันคำสั่ง `printenv` พร้อมส่งอาร์กิวเมนต์เพื่อพิมพ์ชื่อตัวแปรสภาพแวดล้อมที่ต้องการออกมาทางหน้าจอ",
+      "codeBlocks": [
+        {
+          "lang": "yaml",
+          "label": "command-demo.yaml",
+          "code": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: command-demo\n  labels:\n    purpose: demonstrate-command\nspec:\n  containers:\n  - name: command-demo-container\n    image: debian\n    command: [\"printenv\"]\n    args: [\"KUBERNETES_PORT\"]\n  restartPolicy: OnFailure"
+        },
+        {
+          "lang": "bash",
+          "label": "apply-and-check-logs.sh",
+          "code": "# สร้างพอดและอ่านผลลัพธ์ผ่านคำสั่ง logs\nkubectl apply -f command-demo.yaml\nkubectl logs command-demo\n# ผลลัพธ์: tcp://10.96.0.1:443"
+        }
+      ]
+    },
+    {
+      "id": "environment-variable-expansion",
+      "headingEn": "Using Environment Variables within Arguments",
+      "headingTh": "การนำตัวแปรสภาพแวดล้อมมาขยายใน Arguments ($(VAR_NAME))",
+      "contentMarkdown": "คุณสามารถนำค่าจากตัวแปรสภาพแวดล้อม (Environment Variables) ที่นิยามไว้ในพอดมาใช้ใน `args` ได้โดยใช้ไวยากรณ์ `$(VARIABLE_NAME)`\n\n> ข้อแนะนำ: หากคุณต้องการส่งเครื่องหมาย dollar sign ตรงๆ ให้กับโปรแกรมโดยไม่ต้องการให้ Kubernetes ขยายค่า ให้ใช้เครื่องหมายดับเบิล `$$` เช่น `$$(ESCAPE_DOLLAR)`",
+      "codeBlocks": [
+        {
+          "lang": "yaml",
+          "label": "env-in-args.yaml",
+          "code": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: env-args-demo\nspec:\n  containers:\n  - name: demo\n    image: busybox:1.28\n    env:\n    - name: MESSAGE\n      value: \"Hello Kubernetes Tasks!\"\n    command: [\"echo\"]\n    args: [\"$(MESSAGE)\"]\n  restartPolicy: OnFailure"
+        },
+        {
+          "lang": "bash",
+          "label": "verify-env-args.sh",
+          "code": "kubectl apply -f env-in-args.yaml\nkubectl logs env-args-demo\n# ผลลัพธ์: Hello Kubernetes Tasks!"
+        }
+      ]
+    },
+    {
+      "id": "running-commands-in-a-shell",
+      "headingEn": "Running Multiple Commands via Shell and Signal Handling",
+      "headingTh": "การรันคำสั่งหลายชุดผ่าน Shell และการจัดการสัญญาณ (PID 1 Signals)",
+      "contentMarkdown": "หากคุณต้องการรันคำสั่งหลายๆ คำสั่งต่อเนื่องกัน การ Pipe คำสั่ง หรือการใช้ Shell Constructs (เช่น `while`, `if`) คุณต้องรันผ่าน Shell โดยตรง เช่น `/bin/sh -c`\n\n> ข้อควรระวังด้านความมั่นคงปลอดภัย: เมื่อรันผ่าน shell โพรเซสเชลล์จะกลายเป็น PID 1 หากแอปพลิเคชันเบื้องหลังไม่ได้รับสัญญาณ `SIGTERM` จาก kubelet ตอนพอดจะหยุดทำงาน อาจทำให้เกิดการปิดตัวแบบผิดปกติ (Abrupt Termination) แนะนำให้ใช้คำสั่ง `exec` นำหน้าคำสั่งหลักเพื่อส่งต่อ PID 1 ให้กับแอปพลิเคชันโดยตรง",
+      "codeBlocks": [
+        {
+          "lang": "yaml",
+          "label": "shell-demo-pod.yaml",
+          "code": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: shell-demo\nspec:\n  containers:\n  - name: shell-container\n    image: busybox:1.28\n    command: [\"/bin/sh\", \"-c\"]\n    args:\n    - |\n      echo 'Starting background worker...'\n      date\n      sleep 30\n      echo 'Task finished successfully.'"
+        }
+      ]
+    }
+  ],
+  "relatedLinks": [
+    {
+      "title": "Define Environment Variables for a Container",
+      "targetType": "tasks",
+      "targetPageId": "inject-env-variables",
+      "officialUrl": "https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/"
+    },
+    {
+      "title": "Configure a Pod to Use a ConfigMap",
+      "targetType": "tasks",
+      "targetPageId": "inject-configmap",
+      "officialUrl": "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/"
+    }
+  ]
+};
+
+  if (typeof window !== "undefined") {
+    window.KUBE_TASKS_PAGES = window.KUBE_TASKS_PAGES || {};
+    window.KUBE_TASKS_PAGES[pageData.id] = pageData;
+  }
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = pageData;
+  }
+})(typeof window !== "undefined" ? window : globalThis);

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <title>KubeMastery: CNCF Official Exam Prep (CKAD & CKA)</title>
+
+  <!-- PWA & Mobile Meta Tags -->
+  <meta name="application-name" content="KubeMastery">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KubeMastery">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#326ce5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+
+  <!-- Favicon & App Icon -->
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+
+  <!-- Web App Manifest (PWA) -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Local Fonts: Inter & Prompt (100% Offline) -->
+  <link rel="stylesheet" href="css/fonts/fonts.css">
+
+  <!-- Local Tailwind CSS (100% Offline) -->
+  <script src="js/vendor/tailwind.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Prompt', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'SFMono-Regular', 'Consolas', 'monospace']
+          },
+          colors: {
+            kube: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              400: '#60a5fa',
+              500: '#326ce5',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              900: '#1e3a8a',
+            }
+          },
+          animation: {
+            fadeIn: 'fadeIn 0.25s ease-out',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'translateY(6px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200 w-full max-w-full overflow-x-hidden">
+
+  <!-- ========================================================================= -->
+  <!-- TOP NAVIGATION HEADER -->
+  <!-- ========================================================================= -->
+  <header class="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors w-full max-w-full">
+    <div class="max-w-[1680px] mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4 w-full min-w-0">
+
+      <!-- Left: Brand Logo & Mobile Drawer Button -->
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+        <button id="mobile-menu-btn" class="md:hidden p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shrink-0" aria-label="Open navigation menu">
+          <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+
+        <a href="#" onclick="window.app.navigateTo('dashboard'); return false;" class="flex items-center gap-2 sm:gap-2.5 group shrink-0">
+          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white text-lg sm:text-xl shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
+            ☸️
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="font-black text-sm sm:text-lg tracking-tight text-slate-900 dark:text-white truncate">KubeMastery</span>
+              <span class="px-1.5 py-0.5 rounded bg-blue-600 text-white font-black text-[9px] sm:text-[10px] uppercase tracking-wider shrink-0">Official Docs</span>
+            </div>
+            <p class="text-[10px] text-slate-400 font-medium hidden sm:block">CKAD & CKA Preparation Platform</p>
+          </div>
+        </a>
+      </div>
+
+      <!-- Center: Quick Nav Link to Lessons Hub -->
+      <div class="hidden sm:flex items-center gap-2">
+        <button onclick="window.app.navigateTo('lessons')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-cyan-400 border border-blue-200 dark:border-blue-900/50 hover:bg-blue-100 transition-all flex items-center gap-1.5">
+          <span>📚</span>
+          <span>Lessons Hub</span>
+        </button>
+      </div>
+
+      <!-- Right: Quick Search, Gamification Stats, Theme & Profile -->
+      <div class="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+
+        <!-- Global Search Button (Ctrl+K) -->
+        <button onclick="window.globalSearch.open()" class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700/80 text-slate-500 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700/60 transition-all text-xs font-medium group shrink-0" title="Quick Search: Courses, Lessons, kubectl Commands (Ctrl + K)">
+          <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <span class="hidden xl:inline text-slate-400 dark:text-slate-400">Search lessons / commands...</span>
+          <kbd class="hidden sm:inline-block px-1.5 py-0.5 text-[9px] font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-400">Ctrl K</kbd>
+        </button>
+
+        <!-- Streak Tracker -->
+        <div class="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 text-[11px] sm:text-xs font-bold shrink-0" title="Daily Streak Active">
+          <span>🔥</span>
+          <span id="header-streak-count">1</span>
+        </div>
+
+        <!-- Total XP -->
+        <div class="hidden min-[380px]:flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/40 text-blue-600 dark:text-cyan-400 text-[11px] sm:text-xs font-bold shrink-0" title="Total Experience Points">
+          <span>✨</span>
+          <span id="header-xp-count">0 XP</span>
+        </div>
+
+        <!-- Divider -->
+        <div class="hidden min-[380px]:block h-4 sm:h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0"></div>
+
+        <!-- Dark / Light Theme Toggle -->
+        <button id="theme-toggle-btn" class="p-1.5 sm:p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shrink-0" title="สลับโหมดมืด/สว่าง (Toggle Theme)">
+          <svg class="w-4 h-4 hidden dark:block text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9h-1m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <svg class="w-4 h-4 block dark:hidden text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        </button>
+
+        <!-- User Profile Pill -->
+        <button onclick="window.app.navigateTo('profile')" class="flex items-center gap-1.5 pl-1 pr-1.5 sm:pr-2.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 shrink-0">
+          <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-cyan-500 text-white flex items-center justify-center text-sm shadow shrink-0">
+            <span id="header-avatar">☸️</span>
+          </div>
+          <span class="text-xs font-bold text-slate-700 dark:text-slate-200 hidden sm:inline" id="header-user-name">Kubestronaut</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- MAIN APP CONTAINER (SIDEBAR + VIEWPORT) -->
+  <!-- ========================================================================= -->
+  <div class="flex-1 max-w-[1680px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-5 flex gap-4 md:gap-6 lg:gap-8 min-w-0 overflow-x-hidden">
+
+    <!-- Sidebar Navigation: Compact Icon Rail on Tablet (md:w-20), Full Width on Desktop (lg:w-80) -->
+    <aside class="hidden md:block md:w-20 lg:w-80 shrink-0 space-y-4">
+      <nav class="space-y-1.5 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
+        <!-- 1. Dashboard -->
+        <button data-nav-target="dashboard" class="w-full flex items-center justify-center lg:justify-start gap-3 px-3 lg:px-4 py-3 rounded-2xl text-xs font-bold text-blue-600 dark:text-cyan-400 bg-blue-50 dark:bg-blue-950/50 transition-all text-left group" title="Dashboard">
+          <span class="text-lg shrink-0">📊</span>
+          <span class="hidden lg:inline truncate">Dashboard</span>
+        </button>
+
+        <!-- 2. Lessons Hub (CKAD, CKA, Foundation) -->
+        <button data-nav-target="lessons" class="w-full flex items-center justify-center lg:justify-start gap-3 px-3 lg:px-4 py-3 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left group" title="Lessons Hub (CKAD & CKA Courses)">
+          <span class="text-lg shrink-0">☸️</span>
+          <span class="hidden lg:inline truncate">Lessons Hub</span>
+        </button>
+
+        <!-- 2.1. Concepts Accordion Dropdown -->
+        <div class="space-y-1" id="sidebar-concepts-accordion">
+          <button onclick="window.app.toggleConceptsDropdown()"
+            id="sidebar-concepts-toggle-btn"
+            class="w-full flex items-center justify-center lg:justify-between gap-3 px-3 lg:px-4 py-3 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left group" title="Kubernetes Concepts">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="text-lg shrink-0">📘</span>
+              <span class="hidden lg:inline truncate">Concepts</span>
+            </div>
+            <span class="hidden lg:inline text-xs transition-transform duration-200 text-slate-400" id="sidebar-concepts-chevron">▼</span>
+          </button>
+          <!-- Dropdown Container -->
+          <div id="sidebar-concepts-dropdown" class="hidden pl-2 lg:pl-3 space-y-2">
+            <!-- Injected by renderSidebarDropdowns -->
+          </div>
+        </div>
+
+        <!-- 2.2. Tasks Accordion Dropdown -->
+        <div class="space-y-1" id="sidebar-tasks-accordion">
+          <button onclick="window.app.toggleTasksDropdown()"
+            id="sidebar-tasks-toggle-btn"
+            class="w-full flex items-center justify-center lg:justify-between gap-3 px-3 lg:px-4 py-3 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left group" title="Kubernetes Tasks">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="text-lg shrink-0">🛠️</span>
+              <span class="hidden lg:inline truncate">Tasks</span>
+            </div>
+            <span class="hidden lg:inline text-xs transition-transform duration-200 text-slate-400" id="sidebar-tasks-chevron">▼</span>
+          </button>
+          <!-- Dropdown Container -->
+          <div id="sidebar-tasks-dropdown" class="hidden pl-2 lg:pl-3 space-y-2">
+            <!-- Injected by renderSidebarDropdowns -->
+          </div>
+        </div>
+
+        <!-- 3. Imperative CLI Playground -->
+        <button data-nav-target="cli-playground" class="w-full flex items-center justify-center lg:justify-start gap-3 px-3 lg:px-4 py-3 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left group" title="CLI Speed Playground">
+          <span class="text-lg shrink-0">⌨️</span>
+          <span class="hidden lg:inline truncate">CLI Speed Playground</span>
+        </button>
+
+        <!-- 4. Profile & Backup -->
+        <button data-nav-target="profile" class="w-full flex items-center justify-center lg:justify-start gap-3 px-3 lg:px-4 py-3 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left group" title="Profile">
+          <span class="text-lg shrink-0">👤</span>
+          <span class="hidden lg:inline truncate">Profile</span>
+        </button>
+
+        <!-- Official Docs Helper Card (Desktop Only) -->
+        <div class="hidden lg:block mt-6 p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white border border-blue-800/50 space-y-2.5 shadow-lg">
+          <div class="flex items-center justify-between text-[11px] font-black uppercase text-cyan-400">
+            <span>📖 Official Docs</span>
+            <span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px]">kubernetes.io</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Full documentation aligned with official Kubernetes docs for CKAD & CKA exam preparation.
+          </p>
+          <a href="https://kubernetes.io/docs/home/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-400 hover:text-cyan-300 hover:underline">
+            <span>Open kubernetes.io/docs</span>
+            <span>↗</span>
+          </a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Dynamic Main Content Area -->
+    <main id="main-content-view" class="flex-1 min-w-0 pb-24 md:pb-10">
+      <!-- Injected dynamically by js/app.js -->
+    </main>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MOBILE BOTTOM NAVIGATION BAR -->
+  <!-- ========================================================================= -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-3 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-lg w-full max-w-full overflow-hidden">
+    <button data-bottom-nav="dashboard" onclick="window.app.navigateTo('dashboard')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-blue-600 dark:text-cyan-400 font-bold active:scale-95">
+      <span class="text-lg leading-none">📊</span>
+      <span class="text-[11px] tracking-tight mt-1 truncate">Dashboard</span>
+    </button>
+    <button data-bottom-nav="lessons" onclick="window.app.navigateTo('lessons')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-slate-500 dark:text-slate-400 font-medium active:scale-95">
+      <span class="text-base leading-none">☸️</span>
+      <span class="text-[10px] tracking-tight mt-1 truncate">Lessons</span>
+    </button>
+    <button data-bottom-nav="concepts" onclick="window.app.navigateTo('concepts')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-slate-500 dark:text-slate-400 font-medium active:scale-95">
+      <span class="text-base leading-none">📘</span>
+      <span class="text-[10px] tracking-tight mt-1 truncate">Concepts</span>
+    </button>
+    <button data-bottom-nav="tasks" onclick="window.app.navigateTo('tasks')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-slate-500 dark:text-slate-400 font-medium active:scale-95">
+      <span class="text-base leading-none">🛠️</span>
+      <span class="text-[10px] tracking-tight mt-1 truncate">Tasks</span>
+    </button>
+    <button data-bottom-nav="cli-playground" onclick="window.app.navigateTo('cli-playground')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-slate-500 dark:text-slate-400 font-medium active:scale-95">
+      <span class="text-lg leading-none">⌨️</span>
+      <span class="text-[11px] tracking-tight mt-1 truncate">CLI</span>
+    </button>
+    <button data-bottom-nav="profile" onclick="window.app.navigateTo('profile')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-slate-500 dark:text-slate-400 font-medium active:scale-95">
+      <span class="text-lg leading-none">👤</span>
+      <span class="text-[11px] tracking-tight mt-1 truncate">Profile</span>
+    </button>
+  </nav>
+
+  <!-- ========================================================================= -->
+  <!-- MOBILE DRAWER (SLIDE-OVER) -->
+  <!-- ========================================================================= -->
+  <div id="mobile-drawer" class="hidden fixed inset-0 z-50 flex">
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" id="close-drawer-btn"></div>
+    <div class="relative w-72 bg-white dark:bg-slate-900 h-full p-6 space-y-6 shadow-2xl flex flex-col justify-between z-10 overflow-y-auto">
+      <div class="space-y-5">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">☸️</span>
+            <div>
+              <span class="font-black text-lg text-slate-900 dark:text-white block leading-none">KubeMastery</span>
+              <span class="text-[10px] text-slate-400">CKAD & CKA Prep Platform</span>
+            </div>
+          </div>
+        </div>
+
+        <nav class="space-y-1">
+          <button data-nav-target="dashboard" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left">
+            <span>📊 Dashboard</span>
+          </button>
+          <button data-nav-target="lessons" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left">
+            <span>☸️ Lessons Hub (CKAD & CKA)</span>
+          </button>
+          <!-- Mobile Concepts Accordion -->
+          <div class="space-y-1">
+            <button onclick="window.app.toggleConceptsDropdown()" class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left">
+              <span>📘 Concepts</span>
+              <span id="mobile-concepts-chevron" class="text-xs text-slate-400">▼</span>
+            </button>
+            <div id="mobile-concepts-dropdown" class="hidden pl-3 space-y-1"></div>
+          </div>
+
+          <!-- Mobile Tasks Accordion -->
+          <div class="space-y-1">
+            <button onclick="window.app.toggleTasksDropdown()" class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left">
+              <span>🛠️ Tasks</span>
+              <span id="mobile-tasks-chevron" class="text-xs text-slate-400">▼</span>
+            </button>
+            <div id="mobile-tasks-dropdown" class="hidden pl-3 space-y-1"></div>
+          </div>
+          <button data-nav-target="cli-playground" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left">
+            <span>⌨️ CLI Speed Playground</span>
+          </button>
+          <button data-nav-target="profile" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left">
+            <span>👤 Profile</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">
+        KubeMastery • Official Docs Aligned
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <!-- ========================================================================= -->
+    <!-- ========================================================================= -->
+  <!-- IMAGE LIGHTBOX MODAL -->
+  <!-- ========================================================================= -->
+  <div id="image-lightbox-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-8 bg-slate-950/80 backdrop-blur-md transition-opacity">
+    <div class="relative max-w-5xl w-full max-h-[90vh] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-base">🖼️</span>
+          <span id="lightbox-caption" class="text-xs sm:text-sm font-bold text-white truncate max-w-lg">แผนภาพสถาปัตยกรรม</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <a id="lightbox-open-raw" href="#" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-bold flex items-center gap-1">
+            <span>เปิดรูปต้นฉบับ</span>
+            <span>↗</span>
+          </a>
+          <button onclick="window.app.closeLightbox()" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-200 text-xs font-bold">
+            ✕ ปิด
+          </button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-auto p-4 sm:p-6 flex items-center justify-center bg-slate-950/50">
+        <img id="lightbox-image" src="" alt="Architecture Diagram" class="max-w-full max-h-[75vh] object-contain rounded-xl shadow-lg border border-slate-800">
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SHARE MODAL -->
+  <!-- ========================================================================= -->
+  <div id="share-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm transition-opacity">
+    <div class="relative max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🔗</span>
+          <h3 class="text-base font-black text-slate-900 dark:text-white">แชร์หน้านี้ (Share Link)</h3>
+        </div>
+        <button onclick="window.app.closeShareModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-sm font-bold">✕</button>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-xs font-bold text-slate-500 dark:text-slate-400">ลิงก์ตรงสำหรับเปิดหน้านี้ (Direct URL):</label>
+        <div class="flex items-center gap-2">
+          <input id="share-modal-url" type="text" readonly class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-mono text-cyan-600 dark:text-cyan-300 focus:outline-none" />
+          <button onclick="window.app.copyShareModalUrl()" class="shrink-0 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow">
+            📋 Copy
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-2 flex items-center justify-between">
+        <button id="share-modal-native-btn" onclick="window.app.triggerNativeShare()" class="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2">
+          <span>📱</span>
+          <span>แชร์ผ่านแอปอื่น (Share...)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ========================================================================= -->
+  <!-- MODULAR SCRIPTS LOADED IN DEPENDENCY ORDER -->
+  <!-- ========================================================================= -->
+  <!-- CNCF Official Courses -->
+  <script src="lessons/course-foundation.js"></script>
+  <script src="lessons/course-ckad.js"></script>
+  <script src="lessons/course-cka.js"></script>
+  <script src="lessons/courseData.js"></script>
+
+  
+  <!-- Kubernetes Concepts Pages (Full Translation) -->
+  <script src="docs/concepts/admin-logging-extending.js"></script>
+  <script src="docs/concepts/arch-control-plane-node-comm.js"></script>
+  <script src="docs/concepts/arch-controllers-leases.js"></script>
+  <script src="docs/concepts/arch-cri-garbage-collection.js"></script>
+  <script src="docs/concepts/arch-nodes.js"></script>
+  <script src="docs/concepts/config-configmap.js"></script>
+  <script src="docs/concepts/config-manage-resources.js"></script>
+  <script src="docs/concepts/config-secret.js"></script>
+  <script src="docs/concepts/containers-images.js"></script>
+  <script src="docs/concepts/containers-lifecycle-hooks.js"></script>
+  <script src="docs/concepts/net-dns-pod-service.js"></script>
+  <script src="docs/concepts/net-gateway-api.js"></script>
+  <script src="docs/concepts/net-ingress-controllers.js"></script>
+  <script src="docs/concepts/net-network-policies.js"></script>
+  <script src="docs/concepts/net-service.js"></script>
+  <script src="docs/concepts/overview-components.js"></script>
+  <script src="docs/concepts/overview-labels-selectors-annotations.js"></script>
+  <script src="docs/concepts/overview-names-uids-namespaces.js"></script>
+  <script src="docs/concepts/overview-what-is-kubernetes.js"></script>
+  <script src="docs/concepts/overview-working-with-objects.js"></script>
+  <script src="docs/concepts/policy-limits-quotas.js"></script>
+  <script src="docs/concepts/sched-assign-pod-node.js"></script>
+  <script src="docs/concepts/sched-taint-toleration.js"></script>
+  <script src="docs/concepts/sec-pod-security-standards.js"></script>
+  <script src="docs/concepts/sec-service-accounts-rbac.js"></script>
+  <script src="docs/concepts/storage-classes-dynamic.js"></script>
+  <script src="docs/concepts/storage-ephemeral-snapshots.js"></script>
+  <script src="docs/concepts/storage-persistent-volumes.js"></script>
+  <script src="docs/concepts/storage-volumes.js"></script>
+  <script src="docs/concepts/workloads-daemonset.js"></script>
+  <script src="docs/concepts/workloads-deployments.js"></script>
+  <script src="docs/concepts/workloads-ephemeral-disruptions.js"></script>
+  <script src="docs/concepts/workloads-init-containers.js"></script>
+  <script src="docs/concepts/workloads-jobs-cronjobs.js"></script>
+  <script src="docs/concepts/workloads-pod-lifecycle.js"></script>
+  <script src="docs/concepts/workloads-pods.js"></script>
+  <script src="docs/concepts/workloads-replicaset-statefulset.js"></script>
+  <script src="docs/concepts/workloads-sidecar-containers.js"></script>
+  <script src="docs/concepts/index.js"></script>
+
+  <!-- Kubernetes Tasks Pages (Full Translation) -->
+  <script src="docs/tasks/access-declare-network-policy.js"></script>
+  <script src="docs/tasks/access-ingress-nginx.js"></script>
+  <script src="docs/tasks/access-multiple-clusters-kubeconfig.js"></script>
+  <script src="docs/tasks/access-port-forward-services.js"></script>
+  <script src="docs/tasks/admin-etcd-backup-restore.js"></script>
+  <script src="docs/tasks/admin-kubeadm-certs.js"></script>
+  <script src="docs/tasks/admin-kubeadm-upgrade.js"></script>
+  <script src="docs/tasks/admin-resource-quota-namespace.js"></script>
+  <script src="docs/tasks/admin-safely-drain-node.js"></script>
+  <script src="docs/tasks/debug-cluster-crictl.js"></script>
+  <script src="docs/tasks/debug-dns-resolution.js"></script>
+  <script src="docs/tasks/debug-pods-services.js"></script>
+  <script src="docs/tasks/debug-running-pods-exec.js"></script>
+  <script src="docs/tasks/inject-command-arguments.js"></script>
+  <script src="docs/tasks/inject-configmap.js"></script>
+  <script src="docs/tasks/inject-credentials-secrets.js"></script>
+  <script src="docs/tasks/inject-downward-api.js"></script>
+  <script src="docs/tasks/inject-env-variables.js"></script>
+  <script src="docs/tasks/job-cronjobs-work-queue.js"></script>
+  <script src="docs/tasks/manage-declarative-imperative.js"></script>
+  <script src="docs/tasks/manage-kubectl-patch.js"></script>
+  <script src="docs/tasks/manage-kustomize-objects.js"></script>
+  <script src="docs/tasks/pod-assign-memory-cpu.js"></script>
+  <script src="docs/tasks/pod-assign-node-affinity.js"></script>
+  <script src="docs/tasks/pod-configure-service-account.js"></script>
+  <script src="docs/tasks/pod-liveness-readiness-startup-probes.js"></script>
+  <script src="docs/tasks/pod-persistent-volume-storage.js"></script>
+  <script src="docs/tasks/pod-quality-of-service.js"></script>
+  <script src="docs/tasks/pod-security-context.js"></script>
+  <script src="docs/tasks/pod-static-pods.js"></script>
+  <script src="docs/tasks/run-configure-pdb.js"></script>
+  <script src="docs/tasks/run-hpa-autoscaling.js"></script>
+  <script src="docs/tasks/run-stateful-application.js"></script>
+  <script src="docs/tasks/run-stateless-deployment.js"></script>
+  <script src="docs/tasks/tools-install-kubectl.js"></script>
+  <script src="docs/tasks/tools-shell-autocompletion.js"></script>
+  <script src="docs/tasks/index.js"></script>
+
+  <!-- CLI Playground Dataset -->
+  <script src="data/cliDrillsData.js"></script>
+
+  <!-- Core Engines -->
+  <script src="js/audio.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/kubectlEngine.js"></script>
+  <script src="js/globalSearch.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

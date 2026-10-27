@@ -1,0 +1,54 @@
+<svg viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+      
+  <style>
+    .bg { fill: #0f172a; rx: 16; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .card-hl { fill: #1e3a8a; stroke: #3b82f6; stroke-width: 2; rx: 12; }
+    .card-cp { fill: #312e81; stroke: #6366f1; stroke-width: 2; rx: 12; }
+    .card-worker { fill: #064e3b; stroke: #10b981; stroke-width: 2; rx: 12; }
+    .text-title { fill: #f8fafc; font-family: system-ui, sans-serif; font-size: 18px; font-weight: bold; }
+    .text-sub { fill: #94a3b8; font-family: system-ui, sans-serif; font-size: 13px; }
+    .text-body { fill: #e2e8f0; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; }
+    .text-code { fill: #38bdf8; font-family: monospace; font-size: 13px; }
+    .text-badge { fill: #38bdf8; font-family: system-ui, sans-serif; font-size: 11px; font-weight: bold; }
+    .arrow { stroke: #64748b; stroke-width: 2; marker-end: url(#arrowhead); fill: none; }
+    .arrow-hl { stroke: #38bdf8; stroke-width: 2.5; marker-end: url(#arrowhead-hl); fill: none; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-hl" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+      <rect width="820" height="380" class="bg"/>
+      <text x="410" y="40" text-anchor="middle" class="text-title">NetworkPolicy Isolation &amp; Traffic Filtering</text>
+      <text x="410" y="65" text-anchor="middle" class="text-sub">Allowing Specific Ingress Traffic with Default-Deny</text>
+
+      <!-- Client 1: Allowed -->
+      <rect x="60" y="110" width="180" height="70" class="card-worker"/>
+      <text x="150" y="140" text-anchor="middle" class="text-body" fill="#6ee7b7">Backend Pod</text>
+      <text x="150" y="160" text-anchor="middle" class="text-code">role: backend</text>
+
+      <!-- Client 2: Blocked -->
+      <rect x="60" y="220" width="180" height="70" class="card" stroke="#ef4444"/>
+      <text x="150" y="250" text-anchor="middle" class="text-body" fill="#f87171">Untrusted Pod</text>
+      <text x="150" y="270" text-anchor="middle" class="text-code">role: other</text>
+
+      <!-- Target DB Pod -->
+      <rect x="480" y="110" width="260" height="180" class="card" stroke="#818cf8" stroke-width="2"/>
+      <text x="610" y="145" text-anchor="middle" class="text-body" fill="#a5b4fc">Target: Database Pod</text>
+      <text x="610" y="170" text-anchor="middle" class="text-code">podSelector: role: db</text>
+      <rect x="500" y="190" width="220" height="70" class="card" fill="#1e1b4b" stroke="#6366f1"/>
+      <text x="610" y="220" text-anchor="middle" class="text-sub" fill="#e0e7ff">Ingress Policy: Allow port 5432</text>
+      <text x="610" y="240" text-anchor="middle" class="text-sub" fill="#e0e7ff">from podSelector: role: backend</text>
+
+      <!-- Arrows -->
+      <path d="M 240 145 L 480 145" class="arrow-hl"/>
+      <text x="350" y="135" text-anchor="middle" class="text-badge">ALLOWED ✓</text>
+
+      <path d="M 240 255 L 480 255" class="arrow" stroke="#ef4444"/>
+      <text x="350" y="275" text-anchor="middle" fill="#f87171" font-size="12px" font-weight="bold">DROPPED ✗</text>
+    </svg>
