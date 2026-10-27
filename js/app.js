@@ -1684,6 +1684,22 @@ class KubeMasteryApp {
     }
   }
 
+  toggleDocSummary() {
+    const content = document.getElementById("doc-summary-content");
+    const chevron = document.getElementById("doc-summary-chevron");
+    if (!content || !chevron) return;
+    const isHidden = content.classList.contains("hidden");
+    if (isHidden) {
+      content.classList.remove("hidden");
+      chevron.innerHTML = "▲ ซ่อนสรุป";
+      chevron.classList.add("text-amber-500");
+    } else {
+      content.classList.add("hidden");
+      chevron.innerHTML = "▼ แสดงสรุป";
+      chevron.classList.remove("text-amber-500");
+    }
+  }
+
   // ===========================================================================
   // DOCUMENT ARTICLE RENDERER (SHARED FOR CONCEPTS & TASKS)
   // ===========================================================================
@@ -1805,6 +1821,30 @@ class KubeMasteryApp {
                   ${s.headingEn || s.headingTh}
                 </a>
               `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Collapsible Page Summary (Below On this page, Hidden by default) -->
+        ${page.summary ? `
+          <div class="rounded-2xl border border-amber-200/80 dark:border-amber-800/60 bg-amber-50/40 dark:bg-amber-950/20 overflow-hidden transition-all shadow-2xs">
+            <button onclick="window.app.toggleDocSummary()"
+              class="w-full px-4 sm:px-5 py-3 flex items-center justify-between gap-3 text-left hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors cursor-pointer group">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-base group-hover:scale-110 transition-transform">💡</span>
+                <span class="text-xs sm:text-sm font-black text-amber-900 dark:text-amber-200">
+                  สรุปเนื้อหาสำคัญแบบเข้าใจง่าย (Quick Summary)
+                </span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/70 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200">
+                  คลิกเพื่อเปิด/ปิด
+                </span>
+              </div>
+              <span id="doc-summary-chevron" class="text-xs font-bold text-amber-700 dark:text-amber-400 transition-transform duration-200 shrink-0">
+                ▼ แสดงสรุป
+              </span>
+            </button>
+            <div id="doc-summary-content" class="hidden px-5 pb-5 pt-3 border-t border-amber-200/60 dark:border-amber-800/50 prose dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed space-y-2 text-slate-700 dark:text-slate-200">
+              ${this.formatMarkdown(page.summary)}
             </div>
           </div>
         ` : ''}
