@@ -145,6 +145,7 @@ function loadClusterState() {
   fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
   if (!fs.existsSync(STATE_FILE)) {
     const initial = {
+      currentContext: "k8s-c1-H",
       currentNamespace: "default",
       activeQuestion: null,
       namespaces: ["default", "kube-system", "kube-public"],
@@ -158,9 +159,11 @@ function loadClusterState() {
     if (!Array.isArray(state.namespaces)) state.namespaces = ["default", "kube-system"];
     if (!Array.isArray(state.resources)) state.resources = [];
     if (!state.currentNamespace) state.currentNamespace = "default";
+    if (!state.currentContext) state.currentContext = "k8s-c1-H";
     return state;
   } catch (_) {
     return {
+      currentContext: "k8s-c1-H",
       currentNamespace: "default",
       activeQuestion: null,
       namespaces: ["default", "kube-system"],
@@ -1203,12 +1206,32 @@ function main() {
     }
 
     if (cmd === "config") {
-      if (rest[0] === "set-context" && flags.namespace) {
+      const subCmd = rest[0];
+      const currentCtx = state.currentContext || "k8s-c1-H";
+      if (subCmd === "use-context") {
+        const targetCtx = rest[1] || "k8s-c1-H";
+        state.currentContext = targetCtx;
+        saveClusterState(state);
+        console.log(`Switched to context "${targetCtx}".`);
+      } else if (subCmd === "current-context") {
+        console.log(currentCtx);
+      } else if (subCmd === "get-contexts") {
+        const defaultContexts = ["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"];
+        if (!defaultContexts.includes(currentCtx)) defaultContexts.unshift(currentCtx);
+        const rows = defaultContexts.map((ctx) => [
+          ctx === currentCtx ? "*" : "",
+          ctx,
+          ctx,
+          `candidate@${ctx}`,
+          ctx === currentCtx ? (state.currentNamespace || "default") : "default"
+        ]);
+        printTable(["CURRENT", "NAME", "CLUSTER", "AUTHINFO", "NAMESPACE"], rows);
+      } else if (subCmd === "set-context" && flags.namespace) {
         state.currentNamespace = flags.namespace;
         saveClusterState(state);
-        console.log(`Context "kubernetes-admin@kubernetes" modified.`);
-      } else if (rest[0] === "view" || rest[0] === "current-context") {
-        console.log("kubernetes-admin@kubernetes");
+        console.log(`Context "${currentCtx}" modified.`);
+      } else if (subCmd === "view") {
+        console.log(`apiVersion: v1\nkind: Config\ncurrent-context: ${currentCtx}`);
       }
       return;
     }

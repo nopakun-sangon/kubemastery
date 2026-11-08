@@ -1,6 +1,7 @@
 /**
  * KubeMastery: CKAD Hands-On Exam Labs & Dynamic Scenario Generator
- * Aligned 100% with the Official CNCF CKAD Curriculum (5 Domains):
+ * Aligned 100% with the Official CNCF / Linux Foundation CKAD Curriculum (5 Domains)
+ * and PSI Bridge Exam Format (English Exam Tasks + Bilingual Post-Exam Review):
  *   1. Application Design and Build (20%)
  *   2. Application Deployment (20%)
  *   3. Application Observability and Maintenance (15%)
@@ -63,9 +64,10 @@
   }
 
   /**
-   * 20 Official-Style CKAD Exam Question Blueprints
+   * 20 Official CNCF / PSI Bridge Style CKAD Exam Question Blueprints
    * Each blueprint defines a `build(seed)` function that returns a concrete, parameterized
-   * question instance (with randomized namespace, names, ports, files, initial cluster state, and verification rules).
+   * question instance (with randomized cluster context, namespace, names, ports, files,
+   * initial cluster state, and verification rules).
    */
   const CKAD_LAB_BLUEPRINTS = [
     // =========================================================================
@@ -79,6 +81,7 @@
       weight: 7,
       targetMinutes: 6,
       build(seed = 101) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["audit-log-101", "payment-logs-204", "telemetry-prod-309", "stream-core-412"], seed, 1);
         const podName = pick(["web-logger-pod", "order-audit-pod", "api-shipper-pod", "txn-monitor-pod"], seed, 2);
         const sidecarName = pick(["log-shipper", "fluent-sidecar", "audit-agent", "tail-worker"], seed, 3);
@@ -90,23 +93,34 @@
           seed,
           domainId: "domain-1",
           domainTitle: "Application Design and Build (20%)",
-          title: `สร้าง Multi-Container Pod พร้อม Native Sidecar แชร์ Volume (${podName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Multi-Container Pod & Native Sidecar Container (${podName})`,
+          titleTh: `สร้าง Multi-Container Pod พร้อม Native Sidecar แชร์ Volume (${podName})`,
           weight: 7,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-01`,
-          scenario: `ใน Namespace \`${ns}\` มีไฟล์ตั้งต้น \`~/ckad-workspace/ckad-01/pod.yaml\` สำหรับพอดชื่อ \`${podName}\` ซึ่งมีคอนเทนเนอร์หลักชื่อ \`main-app\` ที่เขียนไฟล์ Log ลงใน \`${logPath}/access.log\``,
+          scenario: `A legacy application in namespace \`${ns}\` writes access logs to \`${logPath}/access.log\`. An initial Pod manifest has been provided at \`~/ckad-workspace/ckad-01/pod.yaml\` for Pod \`${podName}\` containing the primary container \`main-app\`.`,
+          scenarioTh: `ใน Namespace \`${ns}\` มีไฟล์ตั้งต้น \`~/ckad-workspace/ckad-01/pod.yaml\` สำหรับพอดชื่อ \`${podName}\` ซึ่งมีคอนเทนเนอร์หลักชื่อ \`main-app\` ที่เขียนไฟล์ Log ลงใน \`${logPath}/access.log\``,
           requirements: [
+            `Update and apply the Pod manifest so that Pod \`${podName}\` is running in namespace \`${ns}\`.`,
+            `Define an \`emptyDir\` volume named \`${volName}\` and mount it into the \`main-app\` container at \`${logPath}\`.`,
+            `Add a **Native Sidecar Container** (an entry in \`initContainers\` with \`restartPolicy: Always\`) named \`${sidecarName}\` using image \`busybox:1.36\` and command \`["sh", "-c", "tail -n+1 -f ${logPath}/access.log"]\`.`,
+            `Mount the shared volume \`${volName}\` into the sidecar container \`${sidecarName}\` at \`${logPath}\`.`
+          ],
+          requirementsTh: [
             `สร้างหรือแก้ไขพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` ให้ทำงานอยู่ในสถานะ \`Running\``,
             `กำหนด Volume ชนิด \`emptyDir\` ชื่อ \`${volName}\` และนำไป Mount เข้ากับคอนเทนเนอร์ \`main-app\` ที่พาธ \`${logPath}\``,
             `เพิ่ม **Native Sidecar Container** (กำหนดใน \`initContainers\` พร้อมตั้งค่า \`restartPolicy: Always\`) ชื่อ \`${sidecarName}\` ใช้อิมเมจ \`busybox:1.36\` รันคำสั่ง \`["sh", "-c", "tail -n+1 -f ${logPath}/access.log"]\``,
             `Mount Volume \`${volName}\` เข้ากับ Sidecar Container \`${sidecarName}\` ที่พาธ \`${logPath}\` เช่นเดียวกัน`
           ],
           hints: [
-            `ใน Kubernetes ยุคใหม่ (CKAD ปัจจุบัน) Native Sidecar คือการใส่คอนเทนเนอร์ไว้ในฟิลด์ spec.initContainers และระบุ restartPolicy: Always ในระดับคอนเทนเนอร์นั้น`,
-            `ตรวจสอบให้แน่ใจว่าทั้ง main-app และ ${sidecarName} มี volumeMounts ที่ชื่อ ${volName} และ mountPath: ${logPath} ตรงกัน`
+            `In Kubernetes 1.29+, a Native Sidecar is defined inside spec.initContainers with restartPolicy: Always at the container level. (ใน K8s ยุคใหม่ Native Sidecar คือการใส่คอนเทนเนอร์ใน spec.initContainers พร้อมระบุ restartPolicy: Always)`,
+            `Ensure both main-app and ${sidecarName} mount volume ${volName} at mountPath: ${logPath}. (ตรวจสอบว่าทั้งสองคอนเทนเนอร์ Mount Volume ${volName} ที่พาธ ${logPath} ตรงกัน)`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-01/pod.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-01/pod.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -154,17 +168,17 @@ spec:
             checks: [
               {
                 id: "pod-exists",
-                title: `พบพอดชื่อ ${podName} ใน Namespace ${ns} และมีสถานะ Running`,
+                title: `Pod ${podName} exists in namespace ${ns} and is Running`,
                 type: "k8s-resource",
                 kind: "Pod",
                 namespace: ns,
                 name: podName,
                 expect: { statusPhase: "Running" },
-                failHint: `ยังไม่พบพอดชื่อ ${podName} ใน Namespace ${ns} หรือพอดยังไม่ได้ถูกสั่ง kubectl apply`
+                failHint: `Pod ${podName} was not found in namespace ${ns} or is not Running. (ตรวจสอบว่าได้สั่ง kubectl apply -f แล้ว)`
               },
               {
                 id: "emptydir-vol",
-                title: `กำหนด Volume emptyDir ชื่อ ${volName} และ Mount ที่ ${logPath} ในคอนเทนเนอร์หลัก`,
+                title: `emptyDir volume ${volName} is defined and mounted at ${logPath} in main-app`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -174,11 +188,11 @@ spec:
                 volType: "emptyDir",
                 containerName: "main-app",
                 mountPath: logPath,
-                failHint: `ตรวจสอบว่าใน spec.volumes มี ${volName}: { emptyDir: {} } และในคอนเทนเนอร์ main-app มี volumeMounts ที่ mountPath: ${logPath}`
+                failHint: `Ensure spec.volumes defines ${volName}: { emptyDir: {} } and main-app mounts it at ${logPath}. (ตรวจสอบ volumeMounts ใน main-app)`
               },
               {
                 id: "native-sidecar",
-                title: `กำหนด Native Sidecar ชื่อ ${sidecarName} (image: busybox:1.36, restartPolicy: Always) และ Mount ${logPath}`,
+                title: `Native Sidecar ${sidecarName} (image: busybox:1.36, restartPolicy: Always) mounts ${logPath}`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -187,7 +201,7 @@ spec:
                 containerName: sidecarName,
                 imagePrefix: "busybox",
                 mountPath: logPath,
-                failHint: `ต้องเพิ่มคอนเทนเนอร์ชื่อ ${sidecarName} ใน initContainers (พร้อม restartPolicy: Always) หรือ containers พร้อม volumeMounts ที่ ${logPath}`
+                failHint: `Add container ${sidecarName} under initContainers with restartPolicy: Always and volumeMounts at ${logPath}. (ต้องเพิ่มใน initContainers พร้อม restartPolicy: Always)`
               }
             ]
           }
@@ -203,6 +217,7 @@ spec:
       weight: 5,
       targetMinutes: 5,
       build(seed = 102) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["web-init-102", "frontend-boot-205", "portal-stage-311", "shop-ui-419"], seed, 1);
         const podName = pick(["init-webapp", "portal-pod", "landing-nginx", "catalog-ui"], seed, 2);
         const initName = pick(["config-initializer", "setup-html", "prepare-assets"], seed, 3);
@@ -213,22 +228,32 @@ spec:
           seed,
           domainId: "domain-1",
           domainTitle: "Application Design and Build (20%)",
-          title: `สร้าง Pod ที่มี Init Container เตรียมไฟล์เริ่มต้น (${podName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Init Container Pre-Configuration (${podName})`,
+          titleTh: `สร้าง Pod ที่มี Init Container เตรียมไฟล์เริ่มต้น (${podName})`,
           weight: 5,
           targetMinutes: 5,
           namespace: ns,
           workspaceDir: `ckad-02`,
-          scenario: `สร้างพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` ที่ใช้ Init Container ในการสร้างไฟล์ \`index.html\` ก่อนที่คอนเทนเนอร์ \`nginx:1.25-alpine\` จะเริ่มทำงาน`,
+          scenario: `A web server Pod must have its landing page generated dynamically by an initialization container before the main NGINX container starts in namespace \`${ns}\`.`,
+          scenarioTh: `สร้างพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` ที่ใช้ Init Container ในการสร้างไฟล์ \`index.html\` ก่อนที่คอนเทนเนอร์ \`nginx:1.25-alpine\` จะเริ่มทำงาน`,
           requirements: [
+            `Create a Pod named \`${podName}\` in namespace \`${ns}\` with an \`emptyDir\` volume named \`web-content\`.`,
+            `Configure an Init Container (\`initContainers\`) named \`${initName}\` using image \`busybox:1.36\` that mounts \`web-content\` at \`/work-dir\` and writes the string \`${secretText}\` into \`/work-dir/index.html\`.`,
+            `Configure the main container named \`web-server\` using image \`nginx:1.25-alpine\`, exposing \`containerPort: 80\`, and mounting \`web-content\` at \`/usr/share/nginx/html\`.`
+          ],
+          requirementsTh: [
             `สร้างพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` พร้อม Volume \`emptyDir\` ชื่อ \`web-content\``,
             `กำหนด \`initContainers\` ชื่อ \`${initName}\` ใช้อิมเมจ \`busybox:1.36\` รันคำสั่งสร้างไฟล์ \`/work-dir/index.html\` ที่มีข้อความว่า \`${secretText}\` (โดย Mount Volume \`web-content\` ไว้ที่ \`/work-dir\`)`,
             `กำหนดคอนเทนเนอร์หลักชื่อ \`web-server\` ใช้อิมเมจ \`nginx:1.25-alpine\` เปิดพอร์ต \`80\` และ Mount Volume \`web-content\` ไว้ที่ \`/usr/share/nginx/html\``
           ],
           hints: [
-            `คำสั่งใน initContainer สามารถใช้: ["sh", "-c", "echo '${secretText}' > /work-dir/index.html"]`,
-            `อย่าลืมผูก Volume web-content ให้ทั้ง initContainer (/work-dir) และคอนเทนเนอร์หลัก (/usr/share/nginx/html)`
+            `Use command: ["sh", "-c", "echo '${secretText}' > /work-dir/index.html"] inside the initContainer. (ใช้คำสั่ง sh -c echo เขียนไฟล์ลงใน /work-dir/index.html)`,
+            `Make sure both initContainer (/work-dir) and main container (/usr/share/nginx/html) mount volume web-content. (อย่าลืมผูก Volume web-content ให้ทั้งสองคอนเทนเนอร์)`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-02/init-pod.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-02/init-pod.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -264,17 +289,17 @@ kubectl apply -f ~/ckad-workspace/ckad-02/init-pod.yaml`,
             checks: [
               {
                 id: "pod-running",
-                title: `พบพอด ${podName} ใน Namespace ${ns}`,
+                title: `Pod ${podName} exists in namespace ${ns} and is Running`,
                 type: "k8s-resource",
                 kind: "Pod",
                 namespace: ns,
                 name: podName,
                 expect: { statusPhase: "Running" },
-                failHint: `ไม่พบพอด ${podName} ใน Namespace ${ns}`
+                failHint: `Pod ${podName} was not found in namespace ${ns}. (ไม่พบพอด ${podName} ใน Namespace ${ns})`
               },
               {
                 id: "init-container-check",
-                title: `มี initContainer ชื่อ ${initName} ที่เขียนข้อความ ${secretText} ลง /work-dir/index.html`,
+                title: `initContainer ${initName} writes ${secretText} to /work-dir/index.html`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -283,11 +308,11 @@ kubectl apply -f ~/ckad-workspace/ckad-02/init-pod.yaml`,
                 containerName: initName,
                 commandSubstring: secretText,
                 mountPath: "/work-dir",
-                failHint: `ตรวจสอบ initContainer ชื่อ ${initName} ว่ามี command เขียนข้อความ '${secretText}' และ mountPath: /work-dir หรือไม่`
+                failHint: `Check initContainer ${initName} command for '${secretText}' and mountPath: /work-dir. (ตรวจสอบ command และ mountPath ของ initContainer)`
               },
               {
                 id: "main-mount-check",
-                title: `คอนเทนเนอร์หลัก web-server ใช้อิมเมจ nginx:1.25-alpine และ Mount ที่ /usr/share/nginx/html`,
+                title: `Main container web-server uses nginx:1.25-alpine and mounts /usr/share/nginx/html`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -297,7 +322,7 @@ kubectl apply -f ~/ckad-workspace/ckad-02/init-pod.yaml`,
                 volType: "emptyDir",
                 containerName: "web-server",
                 mountPath: "/usr/share/nginx/html",
-                failHint: `คอนเทนเนอร์หลักต้องชื่อ web-server และ Mount Volume web-content ที่ /usr/share/nginx/html`
+                failHint: `Main container must be named web-server and mount volume web-content at /usr/share/nginx/html. (คอนเทนเนอร์หลักต้องชื่อ web-server และ Mount ที่ /usr/share/nginx/html)`
               }
             ]
           }
@@ -313,6 +338,7 @@ kubectl apply -f ~/ckad-workspace/ckad-02/init-pod.yaml`,
       weight: 6,
       targetMinutes: 5,
       build(seed = 103) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["batch-jobs-103", "finance-cron-208", "report-engine-315", "data-sync-422"], seed, 1);
         const cronName = pick(["nightly-settlement", "invoice-aggregator", "backup-indexer", "metrics-cleaner"], seed, 2);
         const schedule = pick(["*/5 * * * *", "*/10 * * * *", "0 */2 * * *", "15 * * * *"], seed, 3);
@@ -325,23 +351,34 @@ kubectl apply -f ~/ckad-workspace/ckad-02/init-pod.yaml`,
           seed,
           domainId: "domain-1",
           domainTitle: "Application Design and Build (20%)",
-          title: `สร้าง CronJob กำหนด Parallelism และ ActiveDeadlineSeconds (${cronName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `CronJob with Parallelism & ActiveDeadlineSeconds (${cronName})`,
+          titleTh: `สร้าง CronJob กำหนด Parallelism และ ActiveDeadlineSeconds (${cronName})`,
           weight: 6,
           targetMinutes: 5,
           namespace: ns,
           workspaceDir: `ckad-03`,
-          scenario: `ทีม Data ต้องการรันงานประมวลผลตามตารางเวลาใน Namespace \`${ns}\` โดยควบคุมจำนวนการทำงานขนานและเวลาสูงสุดต่อรอบ`,
+          scenario: `The data engineering team requires a scheduled batch processing \`CronJob\` in namespace \`${ns}\` with strict concurrency, completion count, and execution timeout constraints.`,
+          scenarioTh: `ทีม Data ต้องการรันงานประมวลผลตามตารางเวลาใน Namespace \`${ns}\` โดยควบคุมจำนวนการทำงานขนานและเวลาสูงสุดต่อรอบ`,
           requirements: [
+            `Create a \`CronJob\` named \`${cronName}\` in namespace \`${ns}\` with schedule \`"${schedule}"\`.`,
+            `Set \`successfulJobsHistoryLimit: 2\` and \`failedJobsHistoryLimit: 1\` on the CronJob spec.`,
+            `Under \`jobTemplate.spec\`, configure \`completions: ${completions}\`, \`parallelism: ${parallelism}\`, and \`activeDeadlineSeconds: ${deadline}\`.`,
+            `The Pod template must run image \`busybox:1.36\` with command \`["sh", "-c", "echo Processing batch && sleep 2"]\` and \`restartPolicy: OnFailure\`.`
+          ],
+          requirementsTh: [
             `สร้าง \`CronJob\` ชื่อ \`${cronName}\` ใน Namespace \`${ns}\` ตั้งตารางเวลารันเป็น \`"${schedule}"\``,
             `กำหนด \`successfulJobsHistoryLimit: 2\` และ \`failedJobsHistoryLimit: 1\` ในสเปกของ CronJob`,
             `ใน \`jobTemplate.spec\` ให้กำหนด \`completions: ${completions}\`, \`parallelism: ${parallelism}\`, และ \`activeDeadlineSeconds: ${deadline}\``,
             `คอนเทนเนอร์ในพอดใช้อิมเมจ \`busybox:1.36\` รันคำสั่ง \`["sh", "-c", "echo Processing batch && sleep 2"]\` และตั้ง \`restartPolicy: OnFailure\``
           ],
           hints: [
-            `ใช้คำสั่งลัดสร้างโครงร่างได้: kubectl -n ${ns} create cronjob ${cronName} --image=busybox:1.36 --schedule="${schedule}" --dry-run=client -o yaml > cron.yaml -- sh -c "echo Processing batch && sleep 2"`,
-            `completions, parallelism, และ activeDeadlineSeconds ต้องอยู่ภายใต้ spec.jobTemplate.spec (ระดับของ JobSpec ไม่ใช่ PodSpec)`
+            `Generate boilerplate YAML with: kubectl -n ${ns} create cronjob ${cronName} --image=busybox:1.36 --schedule="${schedule}" --dry-run=client -o yaml > cron.yaml -- sh -c "echo Processing batch && sleep 2"`,
+            `completions, parallelism, and activeDeadlineSeconds belong under spec.jobTemplate.spec (JobSpec level, not PodSpec). (ฟิลด์ทั้ง 3 อยู่ภายใต้ spec.jobTemplate.spec)`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-03/cronjob.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-03/cronjob.yaml
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -374,18 +411,18 @@ kubectl apply -f ~/ckad-workspace/ckad-03/cronjob.yaml`,
             checks: [
               {
                 id: "cron-exists",
-                title: `พบ CronJob ชื่อ ${cronName} ใน Namespace ${ns} พร้อมตารางเวลา "${schedule}"`,
+                title: `CronJob ${cronName} exists in namespace ${ns} with schedule "${schedule}"`,
                 type: "k8s-jsonpath",
                 kind: "CronJob",
                 namespace: ns,
                 name: cronName,
                 rule: "cronSchedule",
                 expectedSchedule: schedule,
-                failHint: `ไม่พบ CronJob ชื่อ ${cronName} ใน Namespace ${ns} หรือค่า spec.schedule ไม่ตรงกับ "${schedule}"`
+                failHint: `CronJob ${cronName} not found in namespace ${ns} or spec.schedule does not match "${schedule}". (ตรวจสอบชื่อและ schedule ของ CronJob)`
               },
               {
                 id: "cron-job-spec",
-                title: `กำหนด completions: ${completions}, parallelism: ${parallelism}, activeDeadlineSeconds: ${deadline} ถูกต้อง`,
+                title: `JobSpec sets completions: ${completions}, parallelism: ${parallelism}, activeDeadlineSeconds: ${deadline}`,
                 type: "k8s-jsonpath",
                 kind: "CronJob",
                 namespace: ns,
@@ -394,11 +431,11 @@ kubectl apply -f ~/ckad-workspace/ckad-03/cronjob.yaml`,
                 completions,
                 parallelism,
                 activeDeadlineSeconds: deadline,
-                failHint: `ตรวจสอบฟิลด์ภายใต้ spec.jobTemplate.spec ว่ามี completions: ${completions}, parallelism: ${parallelism}, activeDeadlineSeconds: ${deadline} ครบถ้วน`
+                failHint: `Verify spec.jobTemplate.spec has completions: ${completions}, parallelism: ${parallelism}, activeDeadlineSeconds: ${deadline}. (ตรวจสอบฟิลด์ใน spec.jobTemplate.spec)`
               },
               {
                 id: "cron-history-limits",
-                title: `กำหนด successfulJobsHistoryLimit: 2 และ restartPolicy: OnFailure`,
+                title: `Configures successfulJobsHistoryLimit: 2 and restartPolicy: OnFailure`,
                 type: "k8s-jsonpath",
                 kind: "CronJob",
                 namespace: ns,
@@ -406,7 +443,7 @@ kubectl apply -f ~/ckad-workspace/ckad-03/cronjob.yaml`,
                 rule: "cronHistoryAndRestart",
                 successfulJobsHistoryLimit: 2,
                 restartPolicy: "OnFailure",
-                failHint: `ตรวจสอบ spec.successfulJobsHistoryLimit: 2 และ spec.jobTemplate.spec.template.spec.restartPolicy: OnFailure`
+                failHint: `Verify spec.successfulJobsHistoryLimit: 2 and Pod template restartPolicy: OnFailure. (ตรวจสอบ successfulJobsHistoryLimit และ restartPolicy)`
               }
             ]
           }
@@ -422,6 +459,7 @@ kubectl apply -f ~/ckad-workspace/ckad-03/cronjob.yaml`,
       weight: 6,
       targetMinutes: 6,
       build(seed = 104) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["storage-app-104", "media-store-211", "archive-db-318", "upload-svc-425"], seed, 1);
         const pvName = pick(["pv-data-104", "pv-media-211", "pv-archive-318", "pv-upload-425"], seed, 2);
         const pvcName = pick(["pvc-app-data", "pvc-media-claim", "pvc-archive-claim", "pvc-upload-claim"], seed, 3);
@@ -434,22 +472,32 @@ kubectl apply -f ~/ckad-workspace/ckad-03/cronjob.yaml`,
           seed,
           domainId: "domain-1",
           domainTitle: "Application Design and Build (20%)",
-          title: `สร้าง PV, PVC (${size}) และนำไปผูกใช้งานกับพอด (${podName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `PersistentVolume, PVC & Pod Storage Mount (${podName})`,
+          titleTh: `สร้าง PV, PVC (${size}) และนำไปผูกใช้งานกับพอด (${podName})`,
           weight: 6,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-04`,
-          scenario: `สร้างพื้นที่จัดเก็บข้อมูลถาวรและนำไปเชื่อมต่อเข้ากับพอดใน Namespace \`${ns}\``,
+          scenario: `Provision persistent storage and mount it into an application Pod in namespace \`${ns}\`.`,
+          scenarioTh: `สร้างพื้นที่จัดเก็บข้อมูลถาวรและนำไปเชื่อมต่อเข้ากับพอดใน Namespace \`${ns}\``,
           requirements: [
+            `Create a cluster-scoped \`PersistentVolume\` named \`${pvName}\` with capacity \`storage: ${size}\`, \`accessModes: ["ReadWriteOnce"]\`, \`storageClassName: standard\`, and \`hostPath.path: /mnt/data-${seed}\`.`,
+            `Create a \`PersistentVolumeClaim\` named \`${pvcName}\` in namespace \`${ns}\` requesting \`storage: ${size}\`, \`accessModes: ["ReadWriteOnce"]\`, and \`storageClassName: standard\`.`,
+            `Create a Pod named \`${podName}\` in namespace \`${ns}\` using image \`nginx:1.25-alpine\` that mounts PVC \`${pvcName}\` at \`${mountPath}\`.`
+          ],
+          requirementsTh: [
             `สร้าง \`PersistentVolume\` ชื่อ \`${pvName}\` ขนาด \`${size}\`, \`accessModes: ["ReadWriteOnce"]\`, \`storageClassName: standard\`, และ \`hostPath.path: /mnt/data-${seed}\``,
             `สร้าง \`PersistentVolumeClaim\` ชื่อ \`${pvcName}\` ใน Namespace \`${ns}\` ที่ขอขนาด \`${size}\`, \`accessModes: ["ReadWriteOnce"]\`, และ \`storageClassName: standard\``,
             `สร้างพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` ใช้อิมเมจ \`nginx:1.25-alpine\` โดย Mount PVC \`${pvcName}\` ไปไว้ที่พาธ \`${mountPath}\``
           ],
           hints: [
-            `PV เป็น Cluster-scoped resource (ไม่มี namespace) ส่วน PVC และ Pod ต้องอยู่ใน Namespace ${ns}`,
-            `ตรวจสอบให้ storageClassName และ accessModes ของ PV และ PVC ตรงกันเพื่อให้สถานะเป็น Bound`
+            `PersistentVolume is cluster-scoped (no namespace), whereas PersistentVolumeClaim and Pod must be created in namespace ${ns}. (PV ไม่มี namespace ส่วน PVC และ Pod ต้องอยู่ใน ${ns})`,
+            `Ensure storageClassName: standard and accessModes: [ReadWriteOnce] match on both PV and PVC. (ตรวจสอบให้ storageClassName และ accessModes ตรงกัน)`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-04/storage.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-04/storage.yaml
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -503,29 +551,29 @@ kubectl apply -f ~/ckad-workspace/ckad-04/storage.yaml`,
             checks: [
               {
                 id: "pv-check",
-                title: `พบ PersistentVolume ชื่อ ${pvName} ขนาด ${size} (ReadWriteOnce)`,
+                title: `PersistentVolume ${pvName} exists with capacity ${size} (ReadWriteOnce)`,
                 type: "k8s-jsonpath",
                 kind: "PersistentVolume",
                 namespace: "",
                 name: pvName,
                 rule: "pvCheck",
                 storage: size,
-                failHint: `ไม่พบ PersistentVolume ชื่อ ${pvName} หรือขนาด capacity.storage ไม่ใช่ ${size}`
+                failHint: `PersistentVolume ${pvName} not found or capacity.storage is not ${size}. (ไม่พบ PV ${pvName} หรือขนาดไม่ใช่ ${size})`
               },
               {
                 id: "pvc-check",
-                title: `พบ PersistentVolumeClaim ชื่อ ${pvcName} ใน Namespace ${ns} ขนาด ${size}`,
+                title: `PersistentVolumeClaim ${pvcName} exists in namespace ${ns} requesting ${size}`,
                 type: "k8s-jsonpath",
                 kind: "PersistentVolumeClaim",
                 namespace: ns,
                 name: pvcName,
                 rule: "pvcCheck",
                 storage: size,
-                failHint: `ไม่พบ PVC ชื่อ ${pvcName} ใน Namespace ${ns} หรือ resources.requests.storage ไม่ใช่ ${size}`
+                failHint: `PVC ${pvcName} not found in namespace ${ns} or requests.storage is not ${size}. (ไม่พบ PVC ${pvcName} หรือขนาดไม่ใช่ ${size})`
               },
               {
                 id: "pod-pvc-mount",
-                title: `พอด ${podName} ผูกใช้งาน PVC ${pvcName} ที่พาธ ${mountPath}`,
+                title: `Pod ${podName} mounts PVC ${pvcName} at ${mountPath}`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -533,7 +581,7 @@ kubectl apply -f ~/ckad-workspace/ckad-04/storage.yaml`,
                 rule: "podPvcMount",
                 claimName: pvcName,
                 mountPath: mountPath,
-                failHint: `พอด ${podName} ยังไม่ได้ผูก persistentVolumeClaim.claimName: ${pvcName} หรือไม่ได้ Mount ที่ ${mountPath}`
+                failHint: `Pod ${podName} does not reference claimName: ${pvcName} or does not mount it at ${mountPath}. (ตรวจสอบการผูก PVC และ mountPath ในพอด)`
               }
             ]
           }
@@ -552,6 +600,7 @@ kubectl apply -f ~/ckad-workspace/ckad-04/storage.yaml`,
       weight: 8,
       targetMinutes: 6,
       build(seed = 105) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["payment-prod-482", "checkout-live-519", "order-core-621", "billing-api-734"], seed, 1);
         const deployName = pick(["checkout-api", "payment-gateway", "order-processor", "billing-worker"], seed, 2);
         const maxSurge = pick([1, 2, "25%"], seed, 3);
@@ -563,22 +612,32 @@ kubectl apply -f ~/ckad-workspace/ckad-04/storage.yaml`,
           seed,
           domainId: "domain-2",
           domainTitle: "Application Deployment (20%)",
-          title: `ปรับกลยุทธ์ RollingUpdate และสั่ง Rollback Deployment ที่พัง (${deployName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `RollingUpdate Strategy & Deployment Rollback (${deployName})`,
+          titleTh: `ปรับกลยุทธ์ RollingUpdate และสั่ง Rollback Deployment ที่พัง (${deployName})`,
           weight: 8,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-05`,
-          scenario: `ใน Namespace \`${ns}\` มี Deployment ชื่อ \`${deployName}\` (จำนวน 3 Replicas) ที่เพิ่งถูกอัปเดตเป็นอิมเมจที่ไม่มีอยู่จริง (\`${brokenImage}\`) ทำให้พอดใหม่ติดสถานะ \`ImagePullBackOff\``,
+          scenario: `In namespace \`${ns}\`, Deployment \`${deployName}\` (3 replicas) was recently updated to a non-existent container image (\`${brokenImage}\`), causing new Pods to fail with \`ImagePullBackOff\`.`,
+          scenarioTh: `ใน Namespace \`${ns}\` มี Deployment ชื่อ \`${deployName}\` (จำนวน 3 Replicas) ที่เพิ่งถูกอัปเดตเป็นอิมเมจที่ไม่มีอยู่จริง (\`${brokenImage}\`) ทำให้พอดใหม่ติดสถานะ \`ImagePullBackOff\``,
           requirements: [
+            `Update Deployment \`${deployName}\` in namespace \`${ns}\` so that \`spec.strategy.rollingUpdate.maxSurge\` is \`${maxSurge}\` and \`spec.strategy.rollingUpdate.maxUnavailable\` is \`0\`.`,
+            `**Roll back** Deployment \`${deployName}\` to Revision 1 (which runs image \`${goodImage}\`) so that all Pods return to the \`Running\` state.`,
+            `Save the output of \`kubectl -n ${ns} rollout history deploy/${deployName}\` to \`~/ckad-workspace/ckad-05/rollout-history.txt\`.`
+          ],
+          requirementsTh: [
             `แก้ไข Deployment \`${deployName}\` ใน Namespace \`${ns}\` ให้ตั้งค่า \`strategy.rollingUpdate.maxSurge: ${maxSurge}\` และ \`strategy.rollingUpdate.maxUnavailable: 0\``,
             `สั่ง **Rollback** Deployment \`${deployName}\` กลับไปยัง Revision 1 (ที่ใช้อิมเมจ \`${goodImage}\`) จนพอดทั้งหมดกลับมาทำงานปกติ`,
             `บันทึกผลลัพธ์ของคำสั่ง \`kubectl -n ${ns} rollout history deploy/${deployName}\` ลงในไฟล์ \`~/ckad-workspace/ckad-05/rollout-history.txt\``
           ],
           hints: [
-            `ใช้ kubectl -n ${ns} edit deploy ${deployName} เพื่อแก้ maxSurge และ maxUnavailable`,
-            `ใช้ kubectl -n ${ns} rollout undo deploy/${deployName} เพื่อย้อนกลับไปยังอิมเมจที่ทำงานได้ (${goodImage})`
+            `Use kubectl -n ${ns} edit deploy ${deployName} or kubectl patch to configure maxSurge and maxUnavailable. (ใช้ kubectl edit หรือ patch เพื่อแก้ค่า RollingUpdate)`,
+            `Run kubectl -n ${ns} rollout undo deploy/${deployName} to roll back to revision 1 (${goodImage}). (ใช้ kubectl rollout undo เพื่อย้อนกลับไปยังอิมเมจที่ทำงานได้)`
           ],
-          solutionCommands: `kubectl -n ${ns} patch deploy ${deployName} -p '{"spec":{"strategy":{"rollingUpdate":{"maxSurge":${typeof maxSurge === "string" ? `"${maxSurge}"` : maxSurge},"maxUnavailable":0}}}}'
+          solutionCommands: `kubectl config use-context ${contextCluster}
+kubectl -n ${ns} patch deploy ${deployName} -p '{"spec":{"strategy":{"rollingUpdate":{"maxSurge":${typeof maxSurge === "string" ? `"${maxSurge}"` : maxSurge},"maxUnavailable":0}}}}'
 kubectl -n ${ns} rollout undo deploy/${deployName}
 kubectl -n ${ns} rollout history deploy/${deployName} > ~/ckad-workspace/ckad-05/rollout-history.txt`,
           setupSpec: {
@@ -609,7 +668,7 @@ kubectl -n ${ns} rollout history deploy/${deployName} > ~/ckad-workspace/ckad-05
             checks: [
               {
                 id: "strategy-check",
-                title: `ตั้งค่า RollingUpdate maxSurge: ${maxSurge} และ maxUnavailable: 0 ใน Deployment ${deployName}`,
+                title: `RollingUpdate strategy sets maxSurge: ${maxSurge} and maxUnavailable: 0 on ${deployName}`,
                 type: "k8s-jsonpath",
                 kind: "Deployment",
                 namespace: ns,
@@ -617,26 +676,26 @@ kubectl -n ${ns} rollout history deploy/${deployName} > ~/ckad-workspace/ckad-05
                 rule: "rollingUpdateStrategy",
                 maxSurge: String(maxSurge),
                 maxUnavailable: "0",
-                failHint: `ค่า spec.strategy.rollingUpdate ของ ${deployName} ยังไม่ใช่ maxSurge: ${maxSurge} และ maxUnavailable: 0`
+                failHint: `spec.strategy.rollingUpdate on ${deployName} does not match maxSurge: ${maxSurge} and maxUnavailable: 0. (ตรวจสอบค่า maxSurge และ maxUnavailable)`
               },
               {
                 id: "rollback-image-check",
-                title: `สั่ง Rollback สำเร็จ (อิมเมจของ Deployment กลับมาเป็น ${goodImage})`,
+                title: `Deployment ${deployName} rolled back to working image ${goodImage}`,
                 type: "k8s-jsonpath",
                 kind: "Deployment",
                 namespace: ns,
                 name: deployName,
                 rule: "deploymentImage",
                 expectedImage: goodImage,
-                failHint: `อิมเมจของ Deployment ${deployName} ยังเป็นเวอร์ชันที่พังอยู่ ให้รัน kubectl -n ${ns} rollout undo deploy/${deployName}`
+                failHint: `Deployment ${deployName} still uses the broken image. Run: kubectl -n ${ns} rollout undo deploy/${deployName}`
               },
               {
                 id: "history-file-check",
-                title: `สร้างไฟล์ ~/ckad-workspace/ckad-05/rollout-history.txt บันทึกประวัติ Rollout`,
+                title: `Rollout history saved to ~/ckad-workspace/ckad-05/rollout-history.txt`,
                 type: "file-contains",
                 filePath: "rollout-history.txt",
                 substrings: ["REVISION", "1"],
-                failHint: `ไม่พบไฟล์ ~/ckad-workspace/ckad-05/rollout-history.txt หรือในไฟล์ยังไม่มีข้อมูลจากคำสั่ง kubectl rollout history`
+                failHint: `File ~/ckad-workspace/ckad-05/rollout-history.txt is missing or does not contain rollout history output.`
               }
             ]
           }
@@ -652,6 +711,7 @@ kubectl -n ${ns} rollout history deploy/${deployName} > ~/ckad-workspace/ckad-05
       weight: 7,
       targetMinutes: 6,
       build(seed = 106) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["canary-prod-106", "ab-test-214", "release-v2-329", "traffic-split-408"], seed, 1);
         const svcName = pick(["frontend-svc", "storefront-svc", "catalog-svc"], seed, 2);
         const appLabel = pick(["storefront", "catalog-ui", "web-portal"], seed, 3);
@@ -664,22 +724,32 @@ kubectl -n ${ns} rollout history deploy/${deployName} > ~/ckad-workspace/ckad-05
           seed,
           domainId: "domain-2",
           domainTitle: "Application Deployment (20%)",
-          title: `ทำ Canary Deployment แบ่งทราฟฟิก 80/20 ภายใต้ Service เดียวกัน (${svcName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Canary Deployment 80/20 Traffic Split (${svcName})`,
+          titleTh: `ทำ Canary Deployment แบ่งทราฟฟิก 80/20 ภายใต้ Service เดียวกัน (${svcName})`,
           weight: 7,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-06`,
-          scenario: `ใน Namespace \`${ns}\` มี Deployment ชื่อ \`${appLabel}-stable\` และ Service ชื่อ \`${svcName}\` ที่คัดเลือกพอดด้วยเลเบล \`app: ${appLabel}\` อยู่แล้ว ทีมต้องการปล่อยเวอร์ชัน Canary เพื่อรับทราฟฟิก **20%** ของพอดทั้งหมด (รวมทั้งหมด ${totalPods} พอด)`,
+          scenario: `In namespace \`${ns}\`, Deployment \`${appLabel}-stable\` and Service \`${svcName}\` (selecting \`app: ${appLabel}\`) are currently serving production traffic. You must deploy a Canary release receiving **20%** of total traffic across a combined fleet of **${totalPods} Pods**.`,
+          scenarioTh: `ใน Namespace \`${ns}\` มี Deployment ชื่อ \`${appLabel}-stable\` และ Service ชื่อ \`${svcName}\` ที่คัดเลือกพอดด้วยเลเบล \`app: ${appLabel}\` อยู่แล้ว ทีมต้องการปล่อยเวอร์ชัน Canary เพื่อรับทราฟฟิก **20%** ของพอดทั้งหมด (รวมทั้งหมด ${totalPods} พอด)`,
           requirements: [
+            `Scale existing Deployment \`${appLabel}-stable\` in namespace \`${ns}\` to \`replicas: ${stableReplicas}\` (80% of ${totalPods} total Pods).`,
+            `Create a new Deployment named \`${appLabel}-canary\` in namespace \`${ns}\` with \`replicas: ${canaryReplicas}\` (20% of ${totalPods} total Pods).`,
+            `Configure \`${appLabel}-canary\` Pod template with labels \`app: ${appLabel}\` and \`track: canary\`, running image \`nginx:1.26-alpine\` on \`containerPort: 80\` so that Service \`${svcName}\` load-balances across both stable and canary Pods.`
+          ],
+          requirementsTh: [
             `ปรับขนาด (Scale) Deployment \`${appLabel}-stable\` ใน Namespace \`${ns}\` ให้มี \`replicas: ${stableReplicas}\` (คิดเป็น 80% ของ ${totalPods} พอด)`,
             `สร้าง Deployment ตัวใหม่ชื่อ \`${appLabel}-canary\` ใน Namespace \`${ns}\` จำนวน \`replicas: ${canaryReplicas}\` (คิดเป็น 20% ของ ${totalPods} พอด)`,
             `กำหนดให้พอดของ \`${appLabel}-canary\` มีเลเบล \`app: ${appLabel}\` และ \`track: canary\` และใช้อิมเมจ \`nginx:1.26-alpine\` เปิดพอร์ต \`80\` เพื่อให้ Service \`${svcName}\` กระจายทราฟฟิกมาหาทั้งชุด stable และ canary`
           ],
           hints: [
-            `ดูไฟล์ตั้งต้นใน ~/ckad-workspace/ckad-06/stable-deploy.yaml แล้วคัดลอกมาสร้างเป็น canary-deploy.yaml`,
-            `ตรวจสอบว่า Service ${svcName} ใช้ selector app: ${appLabel} เพียงตัวเดียวเพื่อให้จับคู่ได้ทั้งพอด stable (${stableReplicas} ตัว) และ canary (${canaryReplicas} ตัว)`
+            `Inspect ~/ckad-workspace/ckad-06/stable-deploy.yaml and copy it as a template for canary-deploy.yaml. (คัดลอกไฟล์ stable-deploy.yaml มาดัดแปลงเป็น canary-deploy.yaml)`,
+            `Ensure Service ${svcName} selects app: ${appLabel} so it matches both stable (${stableReplicas} replicas) and canary (${canaryReplicas} replicas).`
           ],
-          solutionCommands: `kubectl -n ${ns} scale deploy ${appLabel}-stable --replicas=${stableReplicas}
+          solutionCommands: `kubectl config use-context ${contextCluster}
+kubectl -n ${ns} scale deploy ${appLabel}-stable --replicas=${stableReplicas}
 cat << 'EOF' > ~/ckad-workspace/ckad-06/canary-deploy.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -761,18 +831,18 @@ spec:
             checks: [
               {
                 id: "stable-scaled",
-                title: `ปรับขนาด Deployment ${appLabel}-stable เป็น ${stableReplicas} Replicas (80%)`,
+                title: `Deployment ${appLabel}-stable scaled to ${stableReplicas} replicas (80%)`,
                 type: "k8s-jsonpath",
                 kind: "Deployment",
                 namespace: ns,
                 name: `${appLabel}-stable`,
                 rule: "deploymentReplicas",
                 replicas: stableReplicas,
-                failHint: `Deployment ${appLabel}-stable ยังไม่ได้ถูกปรับขนาดเป็น ${stableReplicas} Replicas`
+                failHint: `Deployment ${appLabel}-stable is not scaled to ${stableReplicas} replicas. (ยังไม่ได้ปรับขนาดเป็น ${stableReplicas} Replicas)`
               },
               {
                 id: "canary-created",
-                title: `สร้าง Deployment ${appLabel}-canary จำนวน ${canaryReplicas} Replicas (20%) พร้อมอิมเมจ nginx:1.26-alpine`,
+                title: `Deployment ${appLabel}-canary created with ${canaryReplicas} replicas (20%) and image nginx:1.26-alpine`,
                 type: "k8s-jsonpath",
                 kind: "Deployment",
                 namespace: ns,
@@ -781,7 +851,7 @@ spec:
                 replicas: canaryReplicas,
                 expectedImage: "nginx:1.26-alpine",
                 requiredLabels: { app: appLabel, track: "canary" },
-                failHint: `ตรวจสอบว่าสร้าง Deployment ชื่อ ${appLabel}-canary จำนวน ${canaryReplicas} Replicas, อิมเมจ nginx:1.26-alpine และติดเลเบล app: ${appLabel}, track: canary`
+                failHint: `Ensure Deployment ${appLabel}-canary has ${canaryReplicas} replicas, image nginx:1.26-alpine, and labels app: ${appLabel}, track: canary.`
               }
             ]
           }
@@ -797,6 +867,7 @@ spec:
       weight: 5,
       targetMinutes: 4,
       build(seed = 107) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["bg-deploy-107", "cutover-prod-219", "zero-downtime-304"], seed, 1);
         const svcName = pick(["live-router-svc", "public-api-svc", "customer-web-svc"], seed, 2);
         const greenVersion = pick(["v2.0", "v3.1", "2026.2"], seed, 3);
@@ -806,21 +877,30 @@ spec:
           seed,
           domainId: "domain-2",
           domainTitle: "Application Deployment (20%)",
-          title: `สลับทราฟฟิกแบบ Blue/Green Deployment ไปยังชุด Green (${greenVersion})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Blue/Green Deployment Traffic Cutover (${greenVersion})`,
+          titleTh: `สลับทราฟฟิกแบบ Blue/Green Deployment ไปยังชุด Green (${greenVersion})`,
           weight: 5,
           targetMinutes: 4,
           namespace: ns,
           workspaceDir: `ckad-07`,
-          scenario: `ใน Namespace \`${ns}\` มี Deployment \`app-blue\` (\`version: v1.0\`) ที่กำลังรับทราฟฟิกจาก Service \`${svcName}\` อยู่ ให้คุณสร้าง Deployment \`app-green\` แล้วสลับ Service ไปชี้ที่ชุด Green ทันที`,
+          scenario: `In namespace \`${ns}\`, Deployment \`app-blue\` (\`version: v1.0\`) is currently receiving traffic from Service \`${svcName}\`. Deploy the new \`app-green\` environment and switch Service traffic over to Green.`,
+          scenarioTh: `ใน Namespace \`${ns}\` มี Deployment \`app-blue\` (\`version: v1.0\`) ที่กำลังรับทราฟฟิกจาก Service \`${svcName}\` อยู่ ให้คุณสร้าง Deployment \`app-green\` แล้วสลับ Service ไปชี้ที่ชุด Green ทันที`,
           requirements: [
+            `Create a Deployment named \`app-green\` in namespace \`${ns}\` with \`3\` replicas using image \`nginx:1.26-alpine\` and Pod labels \`app: web-core\` and \`version: "${greenVersion}"\`.`,
+            `Update Service \`${svcName}\` in namespace \`${ns}\` so its selector switches from \`version: "v1.0"\` to \`version: "${greenVersion}"\` (while keeping \`app: web-core\`).`
+          ],
+          requirementsTh: [
             `สร้าง Deployment ชื่อ \`app-green\` ใน Namespace \`${ns}\` จำนวน \`3\` Replicas ใช้อิมเมจ \`nginx:1.26-alpine\` โดยมีเลเบลพอด \`app: web-core\` และ \`version: "${greenVersion}"\``,
             `แก้ไข Service ชื่อ \`${svcName}\` ใน Namespace \`${ns}\` ให้เปลี่ยน Selector จาก \`version: "v1.0"\` ไปเป็น \`version: "${greenVersion}"\` (คงเลเบล \`app: web-core\` ไว้)`
           ],
           hints: [
-            `สามารถดูโครงสร้างของ app-blue ได้จากไฟล์ ~/ckad-workspace/ckad-07/blue-deploy.yaml`,
-            `ใช้ kubectl -n ${ns} edit svc ${svcName} หรือ kubectl patch เพื่อสลับ selector.version เป็น "${greenVersion}"`
+            `Reference ~/ckad-workspace/ckad-07/blue-deploy.yaml to create green-deploy.yaml. (ดูโครงสร้างของ app-blue ได้จากไฟล์ blue-deploy.yaml)`,
+            `Use kubectl -n ${ns} edit svc ${svcName} or kubectl patch to update spec.selector.version to "${greenVersion}".`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-07/green-deploy.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-07/green-deploy.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -902,7 +982,7 @@ spec:
             checks: [
               {
                 id: "green-deploy-exists",
-                title: `พบ Deployment ชื่อ app-green จำนวน 3 Replicas พร้อมเลเบล version: "${greenVersion}"`,
+                title: `Deployment app-green exists with 3 replicas and label version: "${greenVersion}"`,
                 type: "k8s-jsonpath",
                 kind: "Deployment",
                 namespace: ns,
@@ -911,18 +991,18 @@ spec:
                 replicas: 3,
                 expectedImage: "nginx:1.26-alpine",
                 requiredLabels: { app: "web-core", version: greenVersion },
-                failHint: `ไม่พบ Deployment app-green ใน Namespace ${ns} หรือเลเบลพอดยังไม่ใช่ app: web-core, version: "${greenVersion}"`
+                failHint: `Deployment app-green not found in namespace ${ns} or labels do not match app: web-core, version: "${greenVersion}".`
               },
               {
                 id: "svc-switched",
-                title: `Service ${svcName} สลับ Selector ไปชี้ที่ version: "${greenVersion}" เรียบร้อยแล้ว`,
+                title: `Service ${svcName} selector switched to version: "${greenVersion}"`,
                 type: "k8s-jsonpath",
                 kind: "Service",
                 namespace: ns,
                 name: svcName,
                 rule: "serviceSelector",
                 expectedSelector: { app: "web-core", version: greenVersion },
-                failHint: `Service ${svcName} ยังชี้ไปที่ version เดิมอยู่ ต้องแก้ spec.selector.version เป็น "${greenVersion}"`
+                failHint: `Service ${svcName} still points to the old version. Update spec.selector.version to "${greenVersion}".`
               }
             ]
           }
@@ -938,6 +1018,7 @@ spec:
       weight: 5,
       targetMinutes: 5,
       build(seed = 108) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["kustom-prod-108", "overlay-app-221", "gitops-stage-314"], seed, 1);
         const prefix = pick(["prod-", "stage-", "eu-"], seed, 2);
         const envLabel = pick(["production", "staging", "enterprise"], seed, 3);
@@ -947,22 +1028,32 @@ spec:
           seed,
           domainId: "domain-2",
           domainTitle: "Application Deployment (20%)",
-          title: `จัดการ Manifest ด้วย Kustomize (${prefix}api-server)`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Kustomize Manifest Transformation (${prefix}api-server)`,
+          titleTh: `จัดการ Manifest ด้วย Kustomize (${prefix}api-server)`,
           weight: 5,
           targetMinutes: 5,
           namespace: ns,
           workspaceDir: `ckad-08`,
-          scenario: `ในโฟลเดอร์ \`~/ckad-workspace/ckad-08/\` มีไฟล์ \`deployment.yaml\` และ \`service.yaml\` เตรียมไว้ให้แล้ว ให้คุณสร้างไฟล์ \`kustomization.yaml\` เพื่อปรับแต่งและสั่ง Apply ลงในคลัสเตอร์`,
+          scenario: `Base manifests \`deployment.yaml\` and \`service.yaml\` are located in \`~/ckad-workspace/ckad-08/\`. Create a \`kustomization.yaml\` file to customize and deploy these resources into namespace \`${ns}\`.`,
+          scenarioTh: `ในโฟลเดอร์ \`~/ckad-workspace/ckad-08/\` มีไฟล์ \`deployment.yaml\` และ \`service.yaml\` เตรียมไว้ให้แล้ว ให้คุณสร้างไฟล์ \`kustomization.yaml\` เพื่อปรับแต่งและสั่ง Apply ลงในคลัสเตอร์`,
           requirements: [
+            `Create \`~/ckad-workspace/ckad-08/kustomization.yaml\` setting \`namespace: ${ns}\` and \`namePrefix: ${prefix}\`.`,
+            `Configure \`commonLabels\` (or \`labels\`) to apply \`env: ${envLabel}\` to all resources (\`deployment.yaml\` and \`service.yaml\`).`,
+            `Apply the Kustomize directory using \`kubectl apply -k ~/ckad-workspace/ckad-08/\` so that Deployment \`${prefix}api-server\` and Service \`${prefix}api-svc\` are created in namespace \`${ns}\`.`
+          ],
+          requirementsTh: [
             `สร้างไฟล์ \`~/ckad-workspace/ckad-08/kustomization.yaml\` ที่กำหนด \`namespace: ${ns}\` และ \`namePrefix: ${prefix}\``,
             `กำหนดให้เพิ่มป้ายกำกับร่วม (\`commonLabels\` หรือ \`labels\`) คือ \`env: ${envLabel}\` ให้กับทุก Resource (รวมถึง \`deployment.yaml\` และ \`service.yaml\`)`,
             `รันคำสั่ง \`kubectl apply -k ~/ckad-workspace/ckad-08/\` เพื่อสร้าง Deployment ชื่อ \`${prefix}api-server\` และ Service ชื่อ \`${prefix}api-svc\` ใน Namespace \`${ns}\``
           ],
           hints: [
-            `ใน kustomization.yaml ระบุ resources: ["deployment.yaml", "service.yaml"], namespace: ${ns}, namePrefix: ${prefix}, และ commonLabels: { env: ${envLabel} }`,
-            `ใช้คำสั่ง kubectl kustomize ~/ckad-workspace/ckad-08/ เพื่อดูตัวอย่าง YAML ก่อนสั่ง kubectl apply -k`
+            `In kustomization.yaml, specify resources: ["deployment.yaml", "service.yaml"], namespace: ${ns}, namePrefix: ${prefix}, and commonLabels: { env: ${envLabel} }.`,
+            `Preview the generated manifests with kubectl kustomize ~/ckad-workspace/ckad-08/ before running kubectl apply -k.`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-08/kustomization.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-08/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: ${ns}
@@ -1015,21 +1106,21 @@ spec:
             checks: [
               {
                 id: "kustomization-file",
-                title: `สร้างไฟล์ kustomization.yaml พร้อมระบุ namePrefix: ${prefix} และ env: ${envLabel}`,
+                title: `kustomization.yaml defines namePrefix: ${prefix} and env: ${envLabel}`,
                 type: "file-contains",
                 filePath: "kustomization.yaml",
                 substrings: [prefix, envLabel, "deployment.yaml"],
-                failHint: `ตรวจสอบไฟล์ ~/ckad-workspace/ckad-08/kustomization.yaml ว่ามี namePrefix: ${prefix} และ commonLabels env: ${envLabel}`
+                failHint: `Check ~/ckad-workspace/ckad-08/kustomization.yaml for namePrefix: ${prefix} and commonLabels env: ${envLabel}.`
               },
               {
                 id: "kustomize-deploy-applied",
-                title: `ดีพลอย ${prefix}api-server ลงใน Namespace ${ns} สำเร็จ`,
+                title: `Deployment ${prefix}api-server is deployed in namespace ${ns}`,
                 type: "k8s-resource",
                 kind: "Deployment",
                 namespace: ns,
                 name: `${prefix}api-server`,
                 expect: {},
-                failHint: `ยังไม่พบ Deployment ชื่อ ${prefix}api-server ใน Namespace ${ns} (อย่าลืมรัน kubectl apply -k ~/ckad-workspace/ckad-08/)`
+                failHint: `Deployment ${prefix}api-server was not found in namespace ${ns}. Run: kubectl apply -k ~/ckad-workspace/ckad-08/`
               }
             ]
           }
@@ -1048,6 +1139,7 @@ spec:
       weight: 7,
       targetMinutes: 6,
       build(seed = 109) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["health-check-109", "probe-prod-203", "api-monitor-317", "ready-svc-409"], seed, 1);
         const deployName = pick(["health-api", "payment-engine", "inventory-svc", "auth-gateway"], seed, 2);
         const port = pick([80, 8080], seed, 3);
@@ -1058,21 +1150,30 @@ spec:
           seed,
           domainId: "domain-3",
           domainTitle: "Application Observability and Maintenance (15%)",
-          title: `ตั้งค่า Readiness Probe (httpGet) และ Liveness Probe (tcpSocket) บน Deployment (${deployName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Readiness (httpGet) & Liveness (tcpSocket) Probes (${deployName})`,
+          titleTh: `ตั้งค่า Readiness Probe (httpGet) และ Liveness Probe (tcpSocket) บน Deployment (${deployName})`,
           weight: 7,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-09`,
-          scenario: `ใน Namespace \`${ns}\` มี Deployment ชื่อ \`${deployName}\` รันอยู่โดยยังไม่มีระบบตรวจสอบสุขภาพคอนเทนเนอร์ ให้คุณเพิ่มทั้ง \`readinessProbe\` และ \`livenessProbe\` ให้กับคอนเทนเนอร์หลัก`,
+          scenario: `Deployment \`${deployName}\` is running in namespace \`${ns}\` without health checks. Configure both a \`readinessProbe\` and a \`livenessProbe\` on its primary container.`,
+          scenarioTh: `ใน Namespace \`${ns}\` มี Deployment ชื่อ \`${deployName}\` รันอยู่โดยยังไม่มีระบบตรวจสอบสุขภาพคอนเทนเนอร์ ให้คุณเพิ่มทั้ง \`readinessProbe\` และ \`livenessProbe\` ให้กับคอนเทนเนอร์หลัก`,
           requirements: [
+            `Update Deployment \`${deployName}\` in namespace \`${ns}\` to add an \`httpGet\` \`readinessProbe\` on path \`${path}\` and port \`${port}\`, with \`initialDelaySeconds: 5\` and \`periodSeconds: 10\`.`,
+            `Add a \`tcpSocket\` \`livenessProbe\` on port \`${port}\`, with \`initialDelaySeconds: 15\` and \`periodSeconds: 20\`.`
+          ],
+          requirementsTh: [
             `แก้ไข Deployment \`${deployName}\` ใน Namespace \`${ns}\` โดยเพิ่ม \`readinessProbe\` แบบ \`httpGet\` ที่พาธ \`${path}\` พอร์ต \`${port}\`, \`initialDelaySeconds: 5\`, \`periodSeconds: 10\``,
             `เพิ่ม \`livenessProbe\` แบบ \`tcpSocket\` ที่พอร์ต \`${port}\`, \`initialDelaySeconds: 15\`, \`periodSeconds: 20\``
           ],
           hints: [
-            `ทั้ง readinessProbe และ livenessProbe ต้องอยู่ภายใน spec.template.spec.containers[0]`,
-            `สามารถแก้ไขไฟล์ ~/ckad-workspace/ckad-09/deployment.yaml แล้วสั่ง kubectl apply -f ได้เลย`
+            `Both readinessProbe and livenessProbe must be placed inside spec.template.spec.containers[0].`,
+            `You can edit ~/ckad-workspace/ckad-09/deployment.yaml and run kubectl apply -f ~/ckad-workspace/ckad-09/deployment.yaml.`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-09/deployment.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-09/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1151,7 +1252,7 @@ spec:
             checks: [
               {
                 id: "readiness-probe",
-                title: `ตั้งค่า readinessProbe httpGet path: ${path}, port: ${port}, initialDelaySeconds: 5, periodSeconds: 10`,
+                title: `readinessProbe configured with httpGet path: ${path}, port: ${port}, initialDelaySeconds: 5, periodSeconds: 10`,
                 type: "k8s-jsonpath",
                 kind: "Deployment",
                 namespace: ns,
@@ -1163,11 +1264,11 @@ spec:
                 port: port,
                 initialDelaySeconds: 5,
                 periodSeconds: 10,
-                failHint: `ตรวจสอบ readinessProbe ในคอนเทนเนอร์ของ ${deployName} ว่าใช้ httpGet path: ${path}, port: ${port}, initialDelaySeconds: 5, periodSeconds: 10`
+                failHint: `Check readinessProbe on ${deployName} for httpGet path: ${path}, port: ${port}, initialDelaySeconds: 5, periodSeconds: 10.`
               },
               {
                 id: "liveness-probe",
-                title: `ตั้งค่า livenessProbe tcpSocket port: ${port}, initialDelaySeconds: 15, periodSeconds: 20`,
+                title: `livenessProbe configured with tcpSocket port: ${port}, initialDelaySeconds: 15, periodSeconds: 20`,
                 type: "k8s-jsonpath",
                 kind: "Deployment",
                 namespace: ns,
@@ -1178,7 +1279,7 @@ spec:
                 port: port,
                 initialDelaySeconds: 15,
                 periodSeconds: 20,
-                failHint: `ตรวจสอบ livenessProbe ในคอนเทนเนอร์ของ ${deployName} ว่าใช้ tcpSocket port: ${port}, initialDelaySeconds: 15, periodSeconds: 20`
+                failHint: `Check livenessProbe on ${deployName} for tcpSocket port: ${port}, initialDelaySeconds: 15, periodSeconds: 20.`
               }
             ]
           }
@@ -1194,6 +1295,7 @@ spec:
       weight: 7,
       targetMinutes: 5,
       build(seed = 110) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["triage-app-110", "debug-prod-209", "fix-crash-312", "hotfix-pod-418"], seed, 1);
         const podName = pick(["broken-worker", "sync-daemon", "queue-processor", "cache-warmer"], seed, 2);
         const wrongCmd = pick(["sllep", "echho", "daate"], seed, 3);
@@ -1203,21 +1305,31 @@ spec:
           seed,
           domainId: "domain-3",
           domainTitle: "Application Observability and Maintenance (15%)",
-          title: `วินิจฉัยและซ่อมแซม Pod ที่ติดสถานะ CrashLoopBackOff (${podName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Troubleshoot & Fix Pod in CrashLoopBackOff (${podName})`,
+          titleTh: `วินิจฉัยและซ่อมแซม Pod ที่ติดสถานะ CrashLoopBackOff (${podName})`,
           weight: 7,
           targetMinutes: 5,
           namespace: ns,
           workspaceDir: `ckad-10`,
-          scenario: `พอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` กำลังแครชและขึ้นสถานะ \`CrashLoopBackOff\` เนื่องจากทั้งอิมเมจและคำสั่งเริ่มต้นมีข้อผิดพลาด`,
+          scenario: `Pod \`${podName}\` in namespace \`${ns}\` is failing with \`CrashLoopBackOff\` due to a malformed startup command.`,
+          scenarioTh: `พอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` กำลังแครชและขึ้นสถานะ \`CrashLoopBackOff\` เนื่องจากคำสั่งเริ่มต้นมีข้อผิดพลาด`,
           requirements: [
+            `Inspect Pod \`${podName}\` in namespace \`${ns}\` (or the manifest at \`~/ckad-workspace/ckad-10/broken-pod.yaml\`) to identify the command error.`,
+            `Fix the container specification so it runs image \`busybox:1.36\` with command \`["sh", "-c", "echo Worker healthy && sleep 3600"]\` (replacing the invalid \`${wrongCmd}\` command).`,
+            `Recreate Pod \`${podName}\` in namespace \`${ns}\` and verify it reaches the \`Running\` state.`
+          ],
+          requirementsTh: [
             `ตรวจสอบสาเหตุของปัญหาในพอด \`${podName}\` (ดูไฟล์ \`~/ckad-workspace/ckad-10/broken-pod.yaml\` หรือใช้ \`kubectl describe pod ${podName} -n ${ns}\`)`,
             `แก้ไขให้อิมเมจของคอนเทนเนอร์เป็น \`busybox:1.36\` และแก้คำสั่งที่พิมพ์ผิด (\`${wrongCmd}\`) ให้เป็น \`["sh", "-c", "echo Worker healthy && sleep 3600"]\``,
             `ลบพอดเก่าที่พังและสร้างพอด \`${podName}\` ใหม่ใน Namespace \`${ns}\` จนมีสถานะ \`Running\``
           ],
           hints: [
-            `พอดที่รันอยู่แล้วไม่สามารถแก้ command โดยตรงได้ ต้องแก้ในไฟล์ ~/ckad-workspace/ckad-10/broken-pod.yaml แล้วรัน kubectl replace --force -f broken-pod.yaml`
+            `A running Pod's command field is immutable. Edit ~/ckad-workspace/ckad-10/broken-pod.yaml, delete the existing Pod, and re-apply. (command ของพอดแก้ไขโดยตรงไม่ได้ ต้องลบพอดเก่าแล้ว apply ใหม่)`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-10/broken-pod.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-10/broken-pod.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1265,7 +1377,7 @@ spec:
             checks: [
               {
                 id: "pod-fixed-cmd",
-                title: `แก้ไขคำสั่งในคอนเทนเนอร์ของพอด ${podName} ให้ถูกต้อง (sleep 3600) และไม่มีคำสั่งผิด (${wrongCmd})`,
+                title: `Pod ${podName} command is fixed (sleep 3600) and no longer contains ${wrongCmd}`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -1273,7 +1385,7 @@ spec:
                 rule: "podCommandFixed",
                 forbiddenSubstring: wrongCmd,
                 requiredSubstring: "sleep 3600",
-                failHint: `คำสั่งในพอด ${podName} ยังมี '${wrongCmd}' อยู่ หรือยังไม่ได้สั่งลบพอดเก่าแล้ว kubectl apply ใหม่`
+                failHint: `Pod ${podName} still contains '${wrongCmd}' or has not been recreated with 'sleep 3600'.`
               }
             ]
           }
@@ -1289,6 +1401,7 @@ spec:
       weight: 4,
       targetMinutes: 4,
       build(seed = 111) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["legacy-mig-111", "api-upgrade-216", "modernize-305"], seed, 1);
         const deployName = pick(["legacy-billing", "old-inventory", "v1beta-crm"], seed, 2);
 
@@ -1297,21 +1410,31 @@ spec:
           seed,
           domainId: "domain-3",
           domainTitle: "Application Observability and Maintenance (15%)",
-          title: `อัปเกรดไฟล์ Manifest จาก API Version เก่าที่ถูกถอดออกแล้ว (${deployName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Migrate Deprecated API Version Manifest (${deployName})`,
+          titleTh: `อัปเกรดไฟล์ Manifest จาก API Version เก่าที่ถูกถอดออกแล้ว (${deployName})`,
           weight: 4,
           targetMinutes: 4,
           namespace: ns,
           workspaceDir: `ckad-11`,
-          scenario: `ไฟล์ \`~/ckad-workspace/ckad-11/legacy-deploy.yaml\` ถูกเขียนไว้ตั้งแต่ยุค Kubernetes รุ่นเก่า (\`extensions/v1beta1\`) และขาดฟิลด์บังคับของ \`apps/v1\``,
+          scenario: `An older Deployment manifest at \`~/ckad-workspace/ckad-11/legacy-deploy.yaml\` uses the removed \`extensions/v1beta1\` API version and omits required \`apps/v1\` selector fields.`,
+          scenarioTh: `ไฟล์ \`~/ckad-workspace/ckad-11/legacy-deploy.yaml\` ถูกเขียนไว้ตั้งแต่ยุค Kubernetes รุ่นเก่า (\`extensions/v1beta1\`) และขาดฟิลด์บังคับของ \`apps/v1\``,
           requirements: [
+            `Update \`~/ckad-workspace/ckad-11/legacy-deploy.yaml\` to use \`apiVersion: apps/v1\`.`,
+            `Add the required \`spec.selector.matchLabels\` field matching the Pod template label (\`app: ${deployName}\`).`,
+            `Apply the updated manifest so Deployment \`${deployName}\` runs in namespace \`${ns}\`.`
+          ],
+          requirementsTh: [
             `แก้ไขไฟล์ \`~/ckad-workspace/ckad-11/legacy-deploy.yaml\` ให้ใช้ \`apiVersion: apps/v1\``,
             `เพิ่มฟิลด์ \`spec.selector.matchLabels\` ให้ตรงกับป้ายกำกับของพอด (\`app: ${deployName}\`)`,
             `สั่ง Apply ไฟล์นี้ลงใน Namespace \`${ns}\` เพื่อให้ Deployment \`${deployName}\` ทำงานได้จริง`
           ],
           hints: [
-            `ใน apps/v1 Deployment บังคับว่าต้องมี spec.selector.matchLabels ที่ตรงกับ spec.template.metadata.labels เสมอ`
+            `In apps/v1, Deployments strictly require spec.selector.matchLabels to match spec.template.metadata.labels. (ใน apps/v1 ต้องระบุ spec.selector.matchLabels เสมอ)`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-11/legacy-deploy.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-11/legacy-deploy.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1358,21 +1481,21 @@ spec:
             checks: [
               {
                 id: "file-updated-v1",
-                title: `อัปเดตไฟล์ legacy-deploy.yaml เป็น apiVersion: apps/v1 และเพิ่ม matchLabels`,
+                title: `legacy-deploy.yaml updated to apiVersion: apps/v1 with matchLabels`,
                 type: "file-contains",
                 filePath: "legacy-deploy.yaml",
                 substrings: ["apps/v1", "matchLabels"],
-                failHint: `ในไฟล์ ~/ckad-workspace/ckad-11/legacy-deploy.yaml ยังไม่ได้แก้เป็น apiVersion: apps/v1 หรือยังไม่มี matchLabels`
+                failHint: `~/ckad-workspace/ckad-11/legacy-deploy.yaml does not contain apiVersion: apps/v1 or matchLabels.`
               },
               {
                 id: "deploy-created",
-                title: `ดีพลอย Deployment ${deployName} ลงใน Namespace ${ns} สำเร็จ`,
+                title: `Deployment ${deployName} is running in namespace ${ns}`,
                 type: "k8s-resource",
                 kind: "Deployment",
                 namespace: ns,
                 name: deployName,
                 expect: {},
-                failHint: `ยังไม่พบ Deployment ${deployName} ใน Namespace ${ns}`
+                failHint: `Deployment ${deployName} was not found in namespace ${ns}.`
               }
             ]
           }
@@ -1388,8 +1511,9 @@ spec:
       weight: 4,
       targetMinutes: 4,
       build(seed = 112) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["log-audit-112", "observability-224", "trace-ops-319"], seed, 1);
-        const podName = pick(["payment-Authorizer", "tx-validator", "fraud-detector"].map(s => s.toLowerCase()), seed, 2);
+        const podName = pick(["payment-authorizer", "tx-validator", "fraud-detector"], seed, 2);
         const errCode = pick(["ERR_DB_TIMEOUT_504", "ERR_AUTH_TOKEN_EXPIRED_401", "ERR_TLS_HANDSHAKE_502"], seed, 3);
 
         return {
@@ -1397,20 +1521,29 @@ spec:
           seed,
           domainId: "domain-3",
           domainTitle: "Application Observability and Maintenance (15%)",
-          title: `ดึง Container Logs ที่พบข้อผิดพลาดบันทึกลงไฟล์ (${podName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Inspect Container Logs & Extract Errors (${podName})`,
+          titleTh: `ดึง Container Logs ที่พบข้อผิดพลาดบันทึกลงไฟล์ (${podName})`,
           weight: 4,
           targetMinutes: 4,
           namespace: ns,
           workspaceDir: `ckad-12`,
-          scenario: `พอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` กำลังทำงานและพิมพ์ข้อความ Log ออกมา ซึ่งมีบรรทัดที่เป็นรหัสข้อผิดพลาด \`CRITICAL\``,
+          scenario: `Pod \`${podName}\` in namespace \`${ns}\` is emitting application logs that include \`CRITICAL\` error entries.`,
+          scenarioTh: `พอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` กำลังทำงานและพิมพ์ข้อความ Log ออกมา ซึ่งมีบรรทัดที่เป็นรหัสข้อผิดพลาด \`CRITICAL\``,
           requirements: [
+            `Retrieve the logs from Pod \`${podName}\` in namespace \`${ns}\` and filter only lines containing the string \`CRITICAL\`.`,
+            `Write the matching log lines to \`~/ckad-workspace/ckad-12/critical-errors.log\`.`
+          ],
+          requirementsTh: [
             `ดึงข้อมูล Logs จากพอด \`${podName}\` ใน Namespace \`${ns}\` โดยคัดกรองเฉพาะบรรทัดที่มีคำว่า \`CRITICAL\``,
             `บันทึกบรรทัดที่พบลงในไฟล์ \`~/ckad-workspace/ckad-12/critical-errors.log\``
           ],
           hints: [
-            `รันคำสั่ง: kubectl -n ${ns} logs ${podName} | grep CRITICAL > ~/ckad-workspace/ckad-12/critical-errors.log`
+            `Run: kubectl -n ${ns} logs ${podName} | grep CRITICAL > ~/ckad-workspace/ckad-12/critical-errors.log`
           ],
-          solutionCommands: `kubectl -n ${ns} logs ${podName} | grep CRITICAL > ~/ckad-workspace/ckad-12/critical-errors.log`,
+          solutionCommands: `kubectl config use-context ${contextCluster}
+kubectl -n ${ns} logs ${podName} | grep CRITICAL > ~/ckad-workspace/ckad-12/critical-errors.log`,
           setupSpec: {
             namespaces: [ns],
             files: {},
@@ -1430,11 +1563,11 @@ spec:
             checks: [
               {
                 id: "log-extracted",
-                title: `บันทึกบรรทัด CRITICAL (${errCode}) ลงในไฟล์ ~/ckad-workspace/ckad-12/critical-errors.log ถูกต้อง`,
+                title: `CRITICAL log entry (${errCode}) written to ~/ckad-workspace/ckad-12/critical-errors.log`,
                 type: "file-contains",
                 filePath: "critical-errors.log",
                 substrings: ["CRITICAL", errCode],
-                failHint: `ไม่พบไฟล์ ~/ckad-workspace/ckad-12/critical-errors.log หรือในไฟล์ยังไม่มีข้อความ CRITICAL ${errCode} จาก kubectl logs`
+                failHint: `File ~/ckad-workspace/ckad-12/critical-errors.log was not found or is missing the CRITICAL ${errCode} log line.`
               }
             ]
           }
@@ -1453,6 +1586,7 @@ spec:
       weight: 8,
       targetMinutes: 6,
       build(seed = 113) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["config-sec-113", "vault-app-207", "cred-inject-316"], seed, 1);
         const cmName = pick(["app-settings-cm", "ui-config-cm", "redis-cfg-cm"], seed, 2);
         const secName = pick(["db-credentials-sec", "api-key-sec", "oauth-token-sec"], seed, 3);
@@ -1465,23 +1599,34 @@ spec:
           seed,
           domainId: "domain-4",
           domainTitle: "Application Environment, Configuration and Security (25%)",
-          title: `สร้าง ConfigMap & Secret และฉีดเข้าพอดทั้งแบบ Env และ Volume (${podName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `ConfigMap & Secret Injection into Pod (${podName})`,
+          titleTh: `สร้าง ConfigMap & Secret และฉีดเข้าพอดทั้งแบบ Env และ Volume (${podName})`,
           weight: 8,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-13`,
-          scenario: `แอปพลิเคชันใน Namespace \`${ns}\` ต้องการรับค่าคอนฟิกผ่านตัวแปรสภาพแวดล้อม (Environment Variable) และอ่านไฟล์ความลับจาก Volume`,
+          scenario: `An application in namespace \`${ns}\` requires configuration injected via environment variables and sensitive credentials mounted as read-only files.`,
+          scenarioTh: `แอปพลิเคชันใน Namespace \`${ns}\` ต้องการรับค่าคอนฟิกผ่านตัวแปรสภาพแวดล้อม (Environment Variable) และอ่านไฟล์ความลับจาก Volume`,
           requirements: [
+            `Create a \`ConfigMap\` named \`${cmName}\` in namespace \`${ns}\` containing key-value pair \`APP_MODE=${appMode}\`.`,
+            `Create a \`Secret\` named \`${secName}\` in namespace \`${ns}\` containing key-value pair \`db-password=${dbPass}\`.`,
+            `Create a Pod named \`${podName}\` in namespace \`${ns}\` using image \`nginx:1.25-alpine\` that injects \`APP_MODE\` from ConfigMap \`${cmName}\` (via \`env\` or \`envFrom\`).`,
+            `Mount Secret \`${secName}\` into Pod \`${podName}\` at path \`/etc/secret-volume\` with \`readOnly: true\`.`
+          ],
+          requirementsTh: [
             `สร้าง \`ConfigMap\` ชื่อ \`${cmName}\` ใน Namespace \`${ns}\` ที่มีคีย์ \`APP_MODE=${appMode}\``,
             `สร้าง \`Secret\` ชื่อ \`${secName}\` ใน Namespace \`${ns}\` ที่มีคีย์ \`db-password=${dbPass}\``,
             `สร้างพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` (อิมเมจ \`nginx:1.25-alpine\`) โดยดึงค่าจาก ConfigMap \`${cmName}\` มาเป็นตัวแปรสภาพแวดล้อมชื่อ \`APP_MODE\` (หรือใช้ \`envFrom\`)`,
             `Mount Secret \`${secName}\` เข้าไปในพอด \`${podName}\` ที่พาธ \`/etc/secret-volume\` แบบ \`readOnly: true\``
           ],
           hints: [
-            `สร้างด้วยคำสั่งลัด: kubectl -n ${ns} create configmap ${cmName} --from-literal=APP_MODE=${appMode}`,
-            `สร้าง Secret: kubectl -n ${ns} create secret generic ${secName} --from-literal=db-password='${dbPass}'`
+            `Create the ConfigMap imperatively: kubectl -n ${ns} create configmap ${cmName} --from-literal=APP_MODE=${appMode}`,
+            `Create the Secret imperatively: kubectl -n ${ns} create secret generic ${secName} --from-literal=db-password='${dbPass}'`
           ],
-          solutionCommands: `kubectl -n ${ns} create configmap ${cmName} --from-literal=APP_MODE=${appMode} --dry-run=client -o yaml | kubectl apply -f -
+          solutionCommands: `kubectl config use-context ${contextCluster}
+kubectl -n ${ns} create configmap ${cmName} --from-literal=APP_MODE=${appMode} --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n ${ns} create secret generic ${secName} --from-literal=db-password='${dbPass}' --dry-run=client -o yaml | kubectl apply -f -
 cat << 'EOF' > ~/ckad-workspace/ckad-13/pod.yaml
 apiVersion: v1
@@ -1515,7 +1660,7 @@ kubectl apply -f ~/ckad-workspace/ckad-13/pod.yaml`,
             checks: [
               {
                 id: "cm-created",
-                title: `พบ ConfigMap ${cmName} ที่มี APP_MODE=${appMode}`,
+                title: `ConfigMap ${cmName} exists with APP_MODE=${appMode}`,
                 type: "k8s-jsonpath",
                 kind: "ConfigMap",
                 namespace: ns,
@@ -1523,22 +1668,22 @@ kubectl apply -f ~/ckad-workspace/ckad-13/pod.yaml`,
                 rule: "configMapKey",
                 key: "APP_MODE",
                 expectedValue: appMode,
-                failHint: `ไม่พบ ConfigMap ชื่อ ${cmName} ใน Namespace ${ns} หรือค่า APP_MODE ไม่ใช่ ${appMode}`
+                failHint: `ConfigMap ${cmName} not found in namespace ${ns} or APP_MODE is not ${appMode}.`
               },
               {
                 id: "secret-created",
-                title: `พบ Secret ${secName} ที่มีคีย์ db-password`,
+                title: `Secret ${secName} exists with key db-password`,
                 type: "k8s-jsonpath",
                 kind: "Secret",
                 namespace: ns,
                 name: secName,
                 rule: "secretKeyExists",
                 key: "db-password",
-                failHint: `ไม่พบ Secret ชื่อ ${secName} ใน Namespace ${ns} หรือไม่มีคีย์ db-password`
+                failHint: `Secret ${secName} not found in namespace ${ns} or missing key db-password.`
               },
               {
                 id: "pod-cm-sec-bound",
-                title: `พอด ${podName} ดึง ConfigMap ${cmName} และ Mount Secret ${secName} ที่ /etc/secret-volume`,
+                title: `Pod ${podName} injects ConfigMap ${cmName} and mounts Secret ${secName} at /etc/secret-volume`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -1547,7 +1692,7 @@ kubectl apply -f ~/ckad-workspace/ckad-13/pod.yaml`,
                 cmName,
                 secName,
                 mountPath: "/etc/secret-volume",
-                failHint: `ตรวจสอบว่าพอด ${podName} มีการอ้างอิง ConfigMap ${cmName} ใน env/envFrom และ Mount Secret ${secName} ที่ /etc/secret-volume`
+                failHint: `Verify Pod ${podName} references ConfigMap ${cmName} in env/envFrom and mounts Secret ${secName} at /etc/secret-volume.`
               }
             ]
           }
@@ -1563,6 +1708,7 @@ kubectl apply -f ~/ckad-workspace/ckad-13/pod.yaml`,
       weight: 7,
       targetMinutes: 5,
       build(seed = 114) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["sec-hardening-114", "pci-zone-218", "restricted-307"], seed, 1);
         const podName = pick(["hardened-net-pod", "auditor-agent", "packet-inspector"], seed, 2);
         const uid = pick([1000, 2000, 1001], seed, 3);
@@ -1574,21 +1720,31 @@ kubectl apply -f ~/ckad-workspace/ckad-13/pod.yaml`,
           seed,
           domainId: "domain-4",
           domainTitle: "Application Environment, Configuration and Security (25%)",
-          title: `ตั้งค่า SecurityContext (runAsUser: ${uid}) และ Linux Capability (${cap})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `SecurityContext & Linux Capabilities (${podName})`,
+          titleTh: `ตั้งค่า SecurityContext (runAsUser: ${uid}) และ Linux Capability (${cap})`,
           weight: 7,
           targetMinutes: 5,
           namespace: ns,
           workspaceDir: `ckad-14`,
-          scenario: `ทีม Security กำหนดให้พอด \`${podName}\` ใน Namespace \`${ns}\` ต้องรันด้วยสิทธิ์ผู้ใช้ที่ระบุและเพิ่ม Linux Capability เฉพาะระดับคอนเทนเนอร์`,
+          scenario: `Security compliance in namespace \`${ns}\` requires Pod \`${podName}\` to run under specific non-root user/group IDs and grant a specific Linux capability at the container level.`,
+          scenarioTh: `ทีม Security กำหนดให้พอด \`${podName}\` ใน Namespace \`${ns}\` ต้องรันด้วยสิทธิ์ผู้ใช้ที่ระบุและเพิ่ม Linux Capability เฉพาะระดับคอนเทนเนอร์`,
           requirements: [
+            `Create a Pod named \`${podName}\` in namespace \`${ns}\` using image \`busybox:1.36\` and command \`["sh", "-c", "sleep 3600"]\`.`,
+            `At the **Pod level** (\`spec.securityContext\`), configure \`runAsUser: ${uid}\` and \`fsGroup: ${gid}\`.`,
+            `At the **Container level** (\`spec.containers[0].securityContext\`), configure \`allowPrivilegeEscalation: false\` and add capability \`add: ["${cap}"]\`.`
+          ],
+          requirementsTh: [
             `สร้างพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` ใช้อิมเมจ \`busybox:1.36\` รันคำสั่ง \`["sh", "-c", "sleep 3600"]\``,
             `ในระดับ **Pod SecurityContext** (\`spec.securityContext\`) ให้ตั้งค่า \`runAsUser: ${uid}\` และ \`fsGroup: ${gid}\``,
             `ในระดับ **Container SecurityContext** (\`spec.containers[0].securityContext\`) ให้ตั้งค่า \`allowPrivilegeEscalation: false\` และเพิ่ม Capability \`add: ["${cap}"]\``
           ],
           hints: [
-            `ข้อสอบมักหลอกเรื่องตำแหน่ง: fsGroup ต้องอยู่ที่ระดับ Pod (spec.securityContext) เท่านั้น ส่วน capabilities และ allowPrivilegeEscalation ต้องอยู่ที่ระดับ Container (spec.containers[].securityContext) เท่านั้น`
+            `Remember: fsGroup is a Pod-level field (spec.securityContext), whereas capabilities and allowPrivilegeEscalation are Container-level fields (spec.containers[].securityContext).`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-14/sec-pod.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-14/sec-pod.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1618,7 +1774,7 @@ kubectl apply -f ~/ckad-workspace/ckad-14/sec-pod.yaml`,
             checks: [
               {
                 id: "pod-sec-ctx",
-                title: `ตั้งค่า Pod-level securityContext: runAsUser: ${uid} และ fsGroup: ${gid}`,
+                title: `Pod-level securityContext sets runAsUser: ${uid} and fsGroup: ${gid}`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -1626,11 +1782,11 @@ kubectl apply -f ~/ckad-workspace/ckad-14/sec-pod.yaml`,
                 rule: "podSecurityContext",
                 runAsUser: uid,
                 fsGroup: gid,
-                failHint: `ตรวจสอบ spec.securityContext ของพอด ${podName} ว่ามี runAsUser: ${uid} และ fsGroup: ${gid}`
+                failHint: `Check spec.securityContext on Pod ${podName} for runAsUser: ${uid} and fsGroup: ${gid}.`
               },
               {
                 id: "container-sec-ctx",
-                title: `ตั้งค่า Container-level securityContext: allowPrivilegeEscalation: false และ capabilities.add: ["${cap}"]`,
+                title: `Container-level securityContext sets allowPrivilegeEscalation: false and capabilities.add: ["${cap}"]`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -1638,7 +1794,7 @@ kubectl apply -f ~/ckad-workspace/ckad-14/sec-pod.yaml`,
                 rule: "containerSecurityContext",
                 allowPrivilegeEscalation: false,
                 capability: cap,
-                failHint: `ตรวจสอบ spec.containers[0].securityContext ว่ามี allowPrivilegeEscalation: false และ capabilities.add: ["${cap}"]`
+                failHint: `Check spec.containers[0].securityContext for allowPrivilegeEscalation: false and capabilities.add: ["${cap}"].`
               }
             ]
           }
@@ -1654,6 +1810,7 @@ kubectl apply -f ~/ckad-workspace/ckad-14/sec-pod.yaml`,
       weight: 7,
       targetMinutes: 6,
       build(seed = 115) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["rbac-app-115", "k8s-watcher-212", "metrics-reader-308"], seed, 1);
         const saName = pick(["pod-reader-sa", "inspector-sa", "monitor-bot-sa"], seed, 2);
         const roleName = pick(["pod-reader-role", "inspector-role", "monitor-role"], seed, 3);
@@ -1665,25 +1822,36 @@ kubectl apply -f ~/ckad-workspace/ckad-14/sec-pod.yaml`,
           seed,
           domainId: "domain-4",
           domainTitle: "Application Environment, Configuration and Security (25%)",
-          title: `สร้าง ServiceAccount, Role, RoleBinding และผูกเข้ากับพอด (${saName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `RBAC: ServiceAccount, Role & RoleBinding (${saName})`,
+          titleTh: `สร้าง ServiceAccount, Role, RoleBinding และผูกเข้ากับพอด (${saName})`,
           weight: 7,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-15`,
-          scenario: `พอดมอนิเตอร์ใน Namespace \`${ns}\` ต้องการสิทธิ์ในการเรียกดูรายการ \`pods\` และ \`services\` ผ่าน Kubernetes API`,
+          scenario: `A monitoring Pod in namespace \`${ns}\` requires read-only permissions to inspect \`pods\` and \`services\` via the Kubernetes API.`,
+          scenarioTh: `พอดมอนิเตอร์ใน Namespace \`${ns}\` ต้องการสิทธิ์ในการเรียกดูรายการ \`pods\` และ \`services\` ผ่าน Kubernetes API`,
           requirements: [
+            `Create a \`ServiceAccount\` named \`${saName}\` in namespace \`${ns}\`.`,
+            `Create a \`Role\` named \`${roleName}\` in namespace \`${ns}\` granting \`verbs: ["get", "list", "watch"]\` on \`resources: ["pods", "services"]\`.`,
+            `Create a \`RoleBinding\` named \`${bindingName}\` in namespace \`${ns}\` binding Role \`${roleName}\` to ServiceAccount \`${saName}\`.`,
+            `Create a Pod named \`${podName}\` in namespace \`${ns}\` using image \`nginx:1.25-alpine\` configured with \`serviceAccountName: ${saName}\`.`
+          ],
+          requirementsTh: [
             `สร้าง \`ServiceAccount\` ชื่อ \`${saName}\` ใน Namespace \`${ns}\``,
             `สร้าง \`Role\` ชื่อ \`${roleName}\` ใน Namespace \`${ns}\` ที่อนุญาต \`verbs: ["get", "list", "watch"]\` สำหรับ \`resources: ["pods", "services"]\``,
             `สร้าง \`RoleBinding\` ชื่อ \`${bindingName}\` ใน Namespace \`${ns}\` เพื่อผูก Role \`${roleName}\` เข้ากับ ServiceAccount \`${saName}\``,
             `สร้างหรืออัปเดตพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` (อิมเมจ \`nginx:1.25-alpine\`) ให้รันโดยใช้ \`serviceAccountName: ${saName}\``
           ],
           hints: [
-            `ใช้คำสั่งลัดได้ครบทั้ง 3 ขั้นตอน:
+            `Use imperative commands for speed:
 1. kubectl -n ${ns} create sa ${saName}
 2. kubectl -n ${ns} create role ${roleName} --verb=get,list,watch --resource=pods,services
 3. kubectl -n ${ns} create rolebinding ${bindingName} --role=${roleName} --serviceaccount=${ns}:${saName}`
           ],
-          solutionCommands: `kubectl -n ${ns} create sa ${saName} --dry-run=client -o yaml | kubectl apply -f -
+          solutionCommands: `kubectl config use-context ${contextCluster}
+kubectl -n ${ns} create sa ${saName} --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n ${ns} create role ${roleName} --verb=get,list,watch --resource=pods,services --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n ${ns} create rolebinding ${bindingName} --role=${roleName} --serviceaccount=${ns}:${saName} --dry-run=client -o yaml | kubectl apply -f -
 cat << 'EOF' > ~/ckad-workspace/ckad-15/pod.yaml
@@ -1708,17 +1876,17 @@ kubectl apply -f ~/ckad-workspace/ckad-15/pod.yaml`,
             checks: [
               {
                 id: "sa-exists",
-                title: `สร้าง ServiceAccount ชื่อ ${saName} ใน Namespace ${ns}`,
+                title: `ServiceAccount ${saName} exists in namespace ${ns}`,
                 type: "k8s-resource",
                 kind: "ServiceAccount",
                 namespace: ns,
                 name: saName,
                 expect: {},
-                failHint: `ไม่พบ ServiceAccount ชื่อ ${saName} ใน Namespace ${ns}`
+                failHint: `ServiceAccount ${saName} was not found in namespace ${ns}.`
               },
               {
                 id: "role-check",
-                title: `สร้าง Role ชื่อ ${roleName} อนุญาต get, list, watch บน pods และ services`,
+                title: `Role ${roleName} grants get, list, watch on pods and services`,
                 type: "k8s-jsonpath",
                 kind: "Role",
                 namespace: ns,
@@ -1726,11 +1894,11 @@ kubectl apply -f ~/ckad-workspace/ckad-15/pod.yaml`,
                 rule: "roleCheck",
                 verbs: ["get", "list", "watch"],
                 resources: ["pods", "services"],
-                failHint: `ตรวจสอบ Role ชื่อ ${roleName} ว่ามี verbs: ["get", "list", "watch"] และ resources: ["pods", "services"]`
+                failHint: `Check Role ${roleName} for verbs: ["get", "list", "watch"] and resources: ["pods", "services"].`
               },
               {
                 id: "rb-and-pod-check",
-                title: `สร้าง RoleBinding ${bindingName} และพอด ${podName} ใช้ serviceAccountName: ${saName}`,
+                title: `RoleBinding ${bindingName} exists and Pod ${podName} uses serviceAccountName: ${saName}`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -1738,7 +1906,7 @@ kubectl apply -f ~/ckad-workspace/ckad-15/pod.yaml`,
                 rule: "podServiceAccount",
                 serviceAccountName: saName,
                 roleBindingName: bindingName,
-                failHint: `ตรวจสอบว่าสร้าง RoleBinding ${bindingName} แล้ว และพอด ${podName} ระบุ spec.serviceAccountName: ${saName}`
+                failHint: `Ensure RoleBinding ${bindingName} exists and Pod ${podName} sets spec.serviceAccountName: ${saName}.`
               }
             ]
           }
@@ -1754,6 +1922,7 @@ kubectl apply -f ~/ckad-workspace/ckad-15/pod.yaml`,
       weight: 6,
       targetMinutes: 5,
       build(seed = 116) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["quota-team-116", "compute-limit-215", "finops-ns-322"], seed, 1);
         const podName = pick(["quota-compliant-pod", "analytics-worker", "ml-inference-pod"], seed, 2);
         const reqCpu = pick(["100m", "200m"], seed, 3);
@@ -1766,21 +1935,31 @@ kubectl apply -f ~/ckad-workspace/ckad-15/pod.yaml`,
           seed,
           domainId: "domain-4",
           domainTitle: "Application Environment, Configuration and Security (25%)",
-          title: `กำหนด Resource Requests & Limits ให้ผ่านเกณฑ์ ResourceQuota (${podName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Compute Resource Requests & Limits under ResourceQuota (${podName})`,
+          titleTh: `กำหนด Resource Requests & Limits ให้ผ่านเกณฑ์ ResourceQuota (${podName})`,
           weight: 6,
           targetMinutes: 5,
           namespace: ns,
           workspaceDir: `ckad-16`,
-          scenario: `Namespace \`${ns}\` มีการบังคับใช้ \`ResourceQuota\` ทำให้ทุกพอดที่สร้างใน Namespace นี้ต้องระบุทั้ง \`requests\` และ \`limits\` สำหรับ CPU และ Memory`,
+          scenario: `Namespace \`${ns}\` enforces a \`ResourceQuota\` requiring all Pods to explicitly specify CPU and Memory \`requests\` and \`limits\`.`,
+          scenarioTh: `Namespace \`${ns}\` มีการบังคับใช้ \`ResourceQuota\` ทำให้ทุกพอดที่สร้างใน Namespace นี้ต้องระบุทั้ง \`requests\` และ \`limits\` สำหรับ CPU และ Memory`,
           requirements: [
+            `Create a Pod named \`${podName}\` in namespace \`${ns}\` using image \`nginx:1.25-alpine\`.`,
+            `Configure container \`resources.requests\` with \`cpu: "${reqCpu}"\` and \`memory: "${reqMem}"\`.`,
+            `Configure container \`resources.limits\` with \`cpu: "${limCpu}"\` and \`memory: "${limMem}"\`.`
+          ],
+          requirementsTh: [
             `สร้างพอดชื่อ \`${podName}\` ใน Namespace \`${ns}\` ใช้อิมเมจ \`nginx:1.25-alpine\``,
             `กำหนด \`resources.requests\` เป็น \`cpu: "${reqCpu}"\` และ \`memory: "${reqMem}"\``,
             `กำหนด \`resources.limits\` เป็น \`cpu: "${limCpu}"\` และ \`memory: "${limMem}"\``
           ],
           hints: [
-            `หน่วย Memory ต้องใช้ Mi (Mebibytes) ตัว M พิมพ์ใหญ่และ i พิมพ์เล็ก เช่น ${reqMem}`
+            `Memory units are case-sensitive: use Mi (e.g., ${reqMem}, ${limMem}). (หน่วย Memory ต้องใช้ Mi ตัว M พิมพ์ใหญ่และ i พิมพ์เล็ก)`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-16/pod.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-16/pod.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1817,7 +1996,7 @@ kubectl apply -f ~/ckad-workspace/ckad-16/pod.yaml`,
             checks: [
               {
                 id: "pod-resources-check",
-                title: `พอด ${podName} กำหนด requests (cpu: ${reqCpu}, memory: ${reqMem}) และ limits (cpu: ${limCpu}, memory: ${limMem}) ครบถ้วน`,
+                title: `Pod ${podName} specifies requests (cpu: ${reqCpu}, memory: ${reqMem}) and limits (cpu: ${limCpu}, memory: ${limMem})`,
                 type: "k8s-jsonpath",
                 kind: "Pod",
                 namespace: ns,
@@ -1827,7 +2006,7 @@ kubectl apply -f ~/ckad-workspace/ckad-16/pod.yaml`,
                 reqMem,
                 limCpu,
                 limMem,
-                failHint: `ตรวจสอบ spec.containers[0].resources ของพอด ${podName} ว่าตรงกับ requests (${reqCpu}, ${reqMem}) และ limits (${limCpu}, ${limMem})`
+                failHint: `Check spec.containers[0].resources on Pod ${podName} for requests (${reqCpu}, ${reqMem}) and limits (${limCpu}, ${limMem}).`
               }
             ]
           }
@@ -1846,6 +2025,7 @@ kubectl apply -f ~/ckad-workspace/ckad-16/pod.yaml`,
       weight: 5,
       targetMinutes: 4,
       build(seed = 117) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["net-expose-117", "web-edge-206", "public-svc-313"], seed, 1);
         const deployName = pick(["web-frontend", "customer-portal", "partner-api"], seed, 2);
         const svcName = `${deployName}-nodeport`;
@@ -1856,20 +2036,29 @@ kubectl apply -f ~/ckad-workspace/ckad-16/pod.yaml`,
           seed,
           domainId: "domain-5",
           domainTitle: "Services and Networking (20%)",
-          title: `เปิดเผย Deployment ด้วย Service ชนิด NodePort ที่พอร์ต ${nodePort} (${svcName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Expose Deployment via NodePort Service (${svcName})`,
+          titleTh: `เปิดเผย Deployment ด้วย Service ชนิด NodePort ที่พอร์ต ${nodePort} (${svcName})`,
           weight: 5,
           targetMinutes: 4,
           namespace: ns,
           workspaceDir: `ckad-17`,
-          scenario: `ใน Namespace \`${ns}\` มี Deployment ชื่อ \`${deployName}\` (คอนเทนเนอร์เปิดพอร์ต \`8080\`, เลเบล \`app: ${deployName}\`) รันอยู่แล้ว`,
+          scenario: `Deployment \`${deployName}\` is running in namespace \`${ns}\` with Pod label \`app: ${deployName}\` and containers listening on port \`8080\`.`,
+          scenarioTh: `ใน Namespace \`${ns}\` มี Deployment ชื่อ \`${deployName}\` (คอนเทนเนอร์เปิดพอร์ต \`8080\`, เลเบล \`app: ${deployName}\`) รันอยู่แล้ว`,
           requirements: [
+            `Create a \`Service\` named \`${svcName}\` in namespace \`${ns}\` of \`type: NodePort\`.`,
+            `Configure the Service to select Pods with label \`app: ${deployName}\`, expose Service \`port: 80\`, forward to \`targetPort: 8080\`, and bind static \`nodePort: ${nodePort}\`.`
+          ],
+          requirementsTh: [
             `สร้าง \`Service\` ชื่อ \`${svcName}\` ใน Namespace \`${ns}\` ชนิด \`type: NodePort\``,
             `กำหนดให้คัดเลือกพอดด้วยเลเบล \`app: ${deployName}\` โดยเปิดพอร์ตของ Service ที่ \`port: 80\`, ส่งต่อไปยัง \`targetPort: 8080\`, และกำหนด \`nodePort: ${nodePort}\``
           ],
           hints: [
-            `ระวังจุดที่มักพลาด: port ของ Service คือ 80 แต่คอนเทนเนอร์รันที่ targetPort: 8080 และ nodePort: ${nodePort}`
+            `Pay attention to the port mapping: Service port is 80, container targetPort is 8080, and nodePort is ${nodePort}.`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-17/service.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-17/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -1908,7 +2097,7 @@ kubectl apply -f ~/ckad-workspace/ckad-17/service.yaml`,
             checks: [
               {
                 id: "nodeport-svc-check",
-                title: `สร้าง Service ${svcName} (type: NodePort, port: 80, targetPort: 8080, nodePort: ${nodePort})`,
+                title: `Service ${svcName} configured with type: NodePort, port: 80, targetPort: 8080, nodePort: ${nodePort}`,
                 type: "k8s-jsonpath",
                 kind: "Service",
                 namespace: ns,
@@ -1919,7 +2108,7 @@ kubectl apply -f ~/ckad-workspace/ckad-17/service.yaml`,
                 targetPort: 8080,
                 nodePort: nodePort,
                 expectedSelector: { app: deployName },
-                failHint: `ตรวจสอบ Service ชื่อ ${svcName} ว่ามี type: NodePort, selector app: ${deployName}, port: 80, targetPort: 8080, และ nodePort: ${nodePort}`
+                failHint: `Check Service ${svcName} for type: NodePort, selector app: ${deployName}, port: 80, targetPort: 8080, and nodePort: ${nodePort}.`
               }
             ]
           }
@@ -1935,6 +2124,7 @@ kubectl apply -f ~/ckad-workspace/ckad-17/service.yaml`,
       weight: 6,
       targetMinutes: 5,
       build(seed = 118) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["net-debug-118", "svc-triage-220", "broken-net-325"], seed, 1);
         const svcName = pick(["orders-backend-svc", "inventory-api-svc", "shipping-svc"], seed, 2);
         const realLabel = pick(["orders-v2", "inventory-core", "shipping-live"], seed, 3);
@@ -1945,20 +2135,29 @@ kubectl apply -f ~/ckad-workspace/ckad-17/service.yaml`,
           seed,
           domainId: "domain-5",
           domainTitle: "Services and Networking (20%)",
-          title: `วินิจฉัยและแก้ไข Service ที่ไม่ส่งทราฟฟิกหาพอด (${svcName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Troubleshoot & Fix Broken Service Routing (${svcName})`,
+          titleTh: `วินิจฉัยและแก้ไข Service ที่ไม่ส่งทราฟฟิกหาพอด (${svcName})`,
           weight: 6,
           targetMinutes: 5,
           namespace: ns,
           workspaceDir: `ckad-18`,
-          scenario: `ผู้ใช้งานแจ้งว่าไม่สามารถเชื่อมต่อเข้าหา Service ชื่อ \`${svcName}\` ใน Namespace \`${ns}\` ได้ เนื่องจากทั้ง Label Selector และ TargetPort ของ Service ตั้งค่าไว้ไม่ตรงกับ Deployment ที่รันอยู่จริง`,
+          scenario: `Clients cannot reach Service \`${svcName}\` in namespace \`${ns}\` because both its label selector and targetPort are misconfigured and do not match the running backend Deployment.`,
+          scenarioTh: `ผู้ใช้งานแจ้งว่าไม่สามารถเชื่อมต่อเข้าหา Service ชื่อ \`${svcName}\` ใน Namespace \`${ns}\` ได้ เนื่องจากทั้ง Label Selector และ TargetPort ของ Service ตั้งค่าไว้ไม่ตรงกับ Deployment ที่รันอยู่จริง`,
           requirements: [
+            `Inspect the running Pods/Deployment in namespace \`${ns}\` (\`kubectl get pods --show-labels -n ${ns}\`) to determine the actual Pod label and \`containerPort\`.`,
+            `Update Service \`${svcName}\` in namespace \`${ns}\` so that \`spec.selector.app\` is \`${realLabel}\` and \`targetPort\` is \`${realPort}\` (keeping Service \`port: 80\`).`
+          ],
+          requirementsTh: [
             `ตรวจสอบ Labels และ ContainerPort จริงของ Deployment ใน Namespace \`${ns}\` (ใช้ \`kubectl get pods --show-labels -n ${ns}\` หรือดูไฟล์ใน \`~/ckad-workspace/ckad-18/\`)`,
             `แก้ไข Service \`${svcName}\` ใน Namespace \`${ns}\` ให้มี \`selector.app: ${realLabel}\` และ \`targetPort: ${realPort}\` (โดยคง \`port: 80\` ไว้)`
           ],
           hints: [
-            `พอดจริงในคลัสเตอร์ใช้เลเบล app: ${realLabel} และเปิด containerPort: ${realPort} แต่ Service เดิมชี้ไปที่ app: wrong-label และ targetPort: 9999`
+            `The running Pods use label app: ${realLabel} and containerPort: ${realPort}, whereas the broken Service points to app: wrong-legacy-label and targetPort: 9999.`
           ],
-          solutionCommands: `kubectl -n ${ns} patch svc ${svcName} --type=merge -p '{"spec":{"selector":{"app":"${realLabel}"},"ports":[{"port":80,"targetPort":${realPort}}]}}'`,
+          solutionCommands: `kubectl config use-context ${contextCluster}
+kubectl -n ${ns} patch svc ${svcName} --type=merge -p '{"spec":{"selector":{"app":"${realLabel}"},"ports":[{"port":80,"targetPort":${realPort}}]}}'`,
           setupSpec: {
             namespaces: [ns],
             files: {
@@ -2004,7 +2203,7 @@ spec:
             checks: [
               {
                 id: "svc-fixed",
-                title: `แก้ไข Service ${svcName} ให้ชี้ไปยัง selector app: ${realLabel} และ targetPort: ${realPort}`,
+                title: `Service ${svcName} updated with selector app: ${realLabel} and targetPort: ${realPort}`,
                 type: "k8s-jsonpath",
                 kind: "Service",
                 namespace: ns,
@@ -2013,7 +2212,7 @@ spec:
                 port: 80,
                 targetPort: realPort,
                 expectedSelector: { app: realLabel },
-                failHint: `Service ${svcName} ยังไม่ได้แก้ selector เป็น app: ${realLabel} หรือ targetPort ยังไม่ใช่ ${realPort}`
+                failHint: `Service ${svcName} selector is not app: ${realLabel} or targetPort is not ${realPort}.`
               }
             ]
           }
@@ -2029,6 +2228,7 @@ spec:
       weight: 7,
       targetMinutes: 6,
       build(seed = 119) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["ingress-gw-119", "edge-router-213", "web-routing-320"], seed, 1);
         const ingName = pick(["main-gateway-ing", "shop-router-ing", "api-edge-ing"], seed, 2);
         const host = pick(["shop.k8s.local", "portal.exam.io", "api.kubemastery.io"], seed, 3);
@@ -2039,23 +2239,34 @@ spec:
           seed,
           domainId: "domain-5",
           domainTitle: "Services and Networking (20%)",
-          title: `สร้าง Ingress แยกเส้นทางตาม Host (${host}) และ Path (${apiPath})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `Ingress Host & Path-Based Routing (${ingName})`,
+          titleTh: `สร้าง Ingress แยกเส้นทางตาม Host (${host}) และ Path (${apiPath})`,
           weight: 7,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-19`,
-          scenario: `ใน Namespace \`${ns}\` มี Service ชื่อ \`api-service\` (พอร์ต \`8080\`) และ \`web-service\` (พอร์ต \`80\`) รันอยู่แล้ว ให้สร้าง Ingress เพื่อแยกเส้นทางทราฟฟิก`,
+          scenario: `In namespace \`${ns}\`, two Services are running: \`api-service\` (port \`8080\`) and \`web-service\` (port \`80\`). Create an Ingress resource to route HTTP traffic based on host and path.`,
+          scenarioTh: `ใน Namespace \`${ns}\` มี Service ชื่อ \`api-service\` (พอร์ต \`8080\`) และ \`web-service\` (พอร์ต \`80\`) รันอยู่แล้ว ให้สร้าง Ingress เพื่อแยกเส้นทางทราฟฟิก`,
           requirements: [
+            `Create an \`Ingress\` named \`${ingName}\` in namespace \`${ns}\` with \`ingressClassName: nginx\`.`,
+            `Configure a rule for host \`${host}\` with two \`Prefix\` paths (\`pathType: Prefix\`):`,
+            `1) Path \`${apiPath}\` routes to Service \`api-service\` on port \`8080\`.`,
+            `2) Path \`/web\` routes to Service \`web-service\` on port \`80\`.`
+          ],
+          requirementsTh: [
             `สร้าง \`Ingress\` ชื่อ \`${ingName}\` ใน Namespace \`${ns}\` กำหนด \`ingressClassName: nginx\``,
             `กำหนด Host เป็น \`${host}\` โดยมี 2 เส้นทาง (\`pathType: Prefix\`):`,
             `1) พาธ \`${apiPath}\` ส่งทราฟฟิกไปยัง Service \`api-service\` พอร์ต \`8080\``,
             `2) พาธ \`/web\` ส่งทราฟฟิกไปยัง Service \`web-service\` พอร์ต \`80\``
           ],
           hints: [
-            `ใช้คำสั่งลัดสร้างได้ในบรรทัดเดียว:
+            `Create the Ingress in a single imperative command:
 kubectl -n ${ns} create ingress ${ingName} --class=nginx --rule="${host}${apiPath}*=api-service:8080" --rule="${host}/web*=web-service:80"`
           ],
-          solutionCommands: `kubectl -n ${ns} create ingress ${ingName} --class=nginx --rule="${host}${apiPath}*=api-service:8080" --rule="${host}/web*=web-service:80" --dry-run=client -o yaml > ~/ckad-workspace/ckad-19/ingress.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+kubectl -n ${ns} create ingress ${ingName} --class=nginx --rule="${host}${apiPath}*=api-service:8080" --rule="${host}/web*=web-service:80" --dry-run=client -o yaml > ~/ckad-workspace/ckad-19/ingress.yaml
 kubectl apply -f ~/ckad-workspace/ckad-19/ingress.yaml`,
           setupSpec: {
             namespaces: [ns],
@@ -2069,7 +2280,7 @@ kubectl apply -f ~/ckad-workspace/ckad-19/ingress.yaml`,
             checks: [
               {
                 id: "ingress-check",
-                title: `สร้าง Ingress ${ingName} สำหรับโฮสต์ ${host} ชี้พาธ ${apiPath} -> api-service:8080 และ /web -> web-service:80`,
+                title: `Ingress ${ingName} routes host ${host} paths ${apiPath} -> api-service:8080 and /web -> web-service:80`,
                 type: "k8s-jsonpath",
                 kind: "Ingress",
                 namespace: ns,
@@ -2080,7 +2291,7 @@ kubectl apply -f ~/ckad-workspace/ckad-19/ingress.yaml`,
                   { path: apiPath, serviceName: "api-service", port: 8080 },
                   { path: "/web", serviceName: "web-service", port: 80 }
                 ],
-                failHint: `ตรวจสอบ Ingress ชื่อ ${ingName} ใน Namespace ${ns} ว่ามี host: ${host} และมีทั้งพาธ ${apiPath} (api-service:8080) และ /web (web-service:80)`
+                failHint: `Check Ingress ${ingName} in namespace ${ns} for host: ${host} and paths ${apiPath} (api-service:8080) and /web (web-service:80).`
               }
             ]
           }
@@ -2096,6 +2307,7 @@ kubectl apply -f ~/ckad-workspace/ckad-19/ingress.yaml`,
       weight: 8,
       targetMinutes: 6,
       build(seed = 120) {
+        const contextCluster = pick(["k8s-c1-H", "k8s-c2-AC", "k8s-c3-CCC"], seed, 0);
         const ns = pick(["netpol-sec-120", "zero-trust-225", "db-isolation-330"], seed, 1);
         const polName = pick(["allow-api-to-db", "restrict-redis-access", "db-firewall-policy"], seed, 2);
         const targetRole = pick(["database", "redis-cache", "ledger-store"], seed, 3);
@@ -2107,21 +2319,31 @@ kubectl apply -f ~/ckad-workspace/ckad-19/ingress.yaml`,
           seed,
           domainId: "domain-5",
           domainTitle: "Services and Networking (20%)",
-          title: `สร้าง NetworkPolicy จำกัดการเข้าถึงพอดฐานข้อมูลเฉพาะพอร์ต ${port} (${polName})`,
+          contextCluster,
+          contextCommand: `kubectl config use-context ${contextCluster}`,
+          title: `NetworkPolicy Ingress & Port Restriction (${polName})`,
+          titleTh: `สร้าง NetworkPolicy จำกัดการเข้าถึงพอดฐานข้อมูลเฉพาะพอร์ต ${port} (${polName})`,
           weight: 8,
           targetMinutes: 6,
           namespace: ns,
           workspaceDir: `ckad-20`,
-          scenario: `ใน Namespace \`${ns}\` มีพอดฐานข้อมูลที่มีเลเบล \`role: ${targetRole}\` รันอยู่ ทีม Security ต้องการบล็อกทราฟฟิกขาเข้าทั้งหมด ยกเว้นทราฟฟิกที่มาจากพอดที่มีเลเบล \`role: ${allowedRole}\` ที่เข้ามายังพอร์ต TCP \`${port}\` เท่านั้น`,
+          scenario: `In namespace \`${ns}\`, database Pods run with label \`role: ${targetRole}\`. Security policy requires blocking all incoming traffic to these Pods except TCP connections on port \`${port}\` originating from Pods labeled \`role: ${allowedRole}\`.`,
+          scenarioTh: `ใน Namespace \`${ns}\` มีพอดฐานข้อมูลที่มีเลเบล \`role: ${targetRole}\` รันอยู่ ทีม Security ต้องการบล็อกทราฟฟิกขาเข้าทั้งหมด ยกเว้นทราฟฟิกที่มาจากพอดที่มีเลเบล \`role: ${allowedRole}\` ที่เข้ามายังพอร์ต TCP \`${port}\` เท่านั้น`,
           requirements: [
+            `Create a \`NetworkPolicy\` named \`${polName}\` in namespace \`${ns}\`.`,
+            `Configure \`podSelector\` to target Pods with label \`role: ${targetRole}\` and specify \`policyTypes: ["Ingress"]\`.`,
+            `Allow \`ingress\` traffic only from Pods matching \`podSelector.matchLabels.role: ${allowedRole}\` on TCP port \`${port}\`.`
+          ],
+          requirementsTh: [
             `สร้าง \`NetworkPolicy\` ชื่อ \`${polName}\` ใน Namespace \`${ns}\``,
             `กำหนด \`podSelector\` ให้บังคับใช้กับพอดที่มีเลเบล \`role: ${targetRole}\` และระบุ \`policyTypes: ["Ingress"]\``,
             `อนุญาต \`ingress\` เฉพาะจากพอดที่มี \`podSelector.matchLabels.role: ${allowedRole}\` บนพอร์ต TCP \`${port}\` เท่านั้น`
           ],
           hints: [
-            `ตรวจสอบให้แน่ใจว่า from.podSelector.matchLabels มี role: ${allowedRole} และ ports มี port: ${port} (เป็นตัวเลข ไม่ใช่สตริง)`
+            `Ensure ingress[0].from[0].podSelector.matchLabels specifies role: ${allowedRole} and ingress[0].ports[0].port is integer ${port}.`
           ],
-          solutionCommands: `cat << 'EOF' > ~/ckad-workspace/ckad-20/netpol.yaml
+          solutionCommands: `kubectl config use-context ${contextCluster}
+cat << 'EOF' > ~/ckad-workspace/ckad-20/netpol.yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -2165,7 +2387,7 @@ kubectl apply -f ~/ckad-workspace/ckad-20/netpol.yaml`,
             checks: [
               {
                 id: "netpol-target",
-                title: `สร้าง NetworkPolicy ${polName} ที่จับคู่ podSelector role: ${targetRole}`,
+                title: `NetworkPolicy ${polName} isolates role: ${targetRole} and allows role: ${allowedRole} on TCP port ${port}`,
                 type: "k8s-jsonpath",
                 kind: "NetworkPolicy",
                 namespace: ns,
@@ -2174,7 +2396,7 @@ kubectl apply -f ~/ckad-workspace/ckad-20/netpol.yaml`,
                 targetRole,
                 allowedRole,
                 port,
-                failHint: `ตรวจสอบ NetworkPolicy ชื่อ ${polName} ใน Namespace ${ns} ว่ามี podSelector role: ${targetRole}, ingress from podSelector role: ${allowedRole}, และ port: ${port}`
+                failHint: `Check NetworkPolicy ${polName} in namespace ${ns} for podSelector role: ${targetRole}, ingress from podSelector role: ${allowedRole}, and port: ${port}.`
               }
             ]
           }
@@ -2184,15 +2406,17 @@ kubectl apply -f ~/ckad-workspace/ckad-20/netpol.yaml`,
   ];
 
   /**
-   * Pre-built Exam Sets (Plus ability to generate unlimited custom/randomized sets)
+   * Official Pre-Built Exam Sets (120 Minutes / 16 Questions / 66% Passing Score)
+   * Plus ability to generate unlimited custom/randomized sets
    */
   const INITIAL_EXAM_SETS = [
     {
       id: "set-a",
-      badge: "Exam Set A",
-      title: "CKAD Full Standard Mock Exam #1",
-      description: "ชุดข้อสอบมาตรฐานเสมือนจริง 16 ข้อ ครอบคลุมครบทั้ง 5 หมวดตามสัดส่วนคะแนนสอบจริงของ CNCF (เกณฑ์ผ่าน 66% / เวลา 120 นาที)",
+      badge: "Official Mock Exam — Set A",
+      title: "CKAD Official Mock Exam — Set A (Full 16 Questions)",
+      description: "Full 2-hour (120 minutes) official-style CKAD certification exam covering all 5 CNCF domains. Passing score: 66%.",
       durationMinutes: 120,
+      passingScore: 66,
       seedBase: 100,
       questionIds: [
         "ckad-01", "ckad-02", "ckad-03", "ckad-04",
@@ -2204,28 +2428,34 @@ kubectl apply -f ~/ckad-workspace/ckad-20/netpol.yaml`,
     },
     {
       id: "set-b",
-      badge: "Exam Set B",
-      title: "CKAD Networking, Security & Troubleshooting Focus",
-      description: "ชุดข้อสอบเข้มข้น 10 ข้อ เน้นการแก้ปัญหาพอดพัง, Service Endpoints, Ingress, NetworkPolicy, SecurityContext และ RBAC",
-      durationMinutes: 75,
+      badge: "Official Mock Exam — Set B",
+      title: "CKAD Official Mock Exam — Set B (120 Minutes / 16 Questions)",
+      description: "Full 2-hour (120 minutes) official-style CKAD certification exam with alternate parameters, Kustomize, API deprecation & Ingress routing. Passing score: 66%.",
+      durationMinutes: 120,
+      passingScore: 66,
       seedBase: 200,
       questionIds: [
-        "ckad-05", "ckad-09", "ckad-10", "ckad-12",
-        "ckad-14", "ckad-15", "ckad-16",
+        "ckad-01", "ckad-02", "ckad-03", "ckad-04",
+        "ckad-05", "ckad-06", "ckad-08",
+        "ckad-09", "ckad-10", "ckad-11",
+        "ckad-13", "ckad-14", "ckad-16",
         "ckad-18", "ckad-19", "ckad-20"
       ]
     },
     {
       id: "set-c",
-      badge: "Exam Set C",
-      title: "CKAD Workloads, Sidecar, Config & Storage Focus",
-      description: "ชุดข้อสอบเข้มข้น 10 ข้อ เน้น Multi-Container Sidecar, InitContainers, CronJobs, PV/PVC, Canary, Blue/Green และ Kustomize",
-      durationMinutes: 75,
+      badge: "Official Mock Exam — Set C",
+      title: "CKAD Official Mock Exam — Set C (120 Minutes / 16 Questions)",
+      description: "Full 2-hour (120 minutes) official-style CKAD certification exam with randomized parameters across all 5 CNCF domains. Passing score: 66%.",
+      durationMinutes: 120,
+      passingScore: 66,
       seedBase: 300,
       questionIds: [
-        "ckad-01", "ckad-02", "ckad-03", "ckad-04",
-        "ckad-06", "ckad-07", "ckad-08",
-        "ckad-11", "ckad-13", "ckad-17"
+        "ckad-01", "ckad-03", "ckad-04",
+        "ckad-05", "ckad-07", "ckad-08",
+        "ckad-09", "ckad-10", "ckad-11", "ckad-12",
+        "ckad-13", "ckad-15", "ckad-16",
+        "ckad-17", "ckad-19", "ckad-20"
       ]
     }
   ];
@@ -2247,4 +2477,3 @@ kubectl apply -f ~/ckad-workspace/ckad-20/netpol.yaml`,
     module.exports = ckadLabsCatalog;
   }
 })(typeof window !== "undefined" ? window : globalThis);
-

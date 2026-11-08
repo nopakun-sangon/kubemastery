@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kubemastery-cache-v8';
+const CACHE_NAME = 'kubemastery-cache-v9';
 const ASSETS = [
   "./",
   "./index.html",
