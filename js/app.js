@@ -38,6 +38,9 @@ class KubeMasteryApp {
     // Current Share State
     this.currentShareData = null;
 
+    // Initialize CKAD Hands-On Exam Labs State
+    this.initCkadLabsState();
+
     this.initTheme();
     this.bindGlobalEvents();
     this.syncHeaderStats();
@@ -145,7 +148,9 @@ class KubeMasteryApp {
     setTimeout(() => {
       toast.style.opacity = "0";
       toast.style.transition = "opacity 0.25s ease";
-      setTimeout(() => toast.remove(), 260);
+      setTimeout(() => {
+        if (typeof toast.remove === "function") toast.remove();
+      }, 260);
     }, 2600);
   }
 
@@ -444,6 +449,10 @@ class KubeMasteryApp {
     this.handleHashChange();
   }
 
+  handleHashRoute() {
+    return this.handleHashChange();
+  }
+
   handleHashChange() {
     const rawHash = window.location.hash.replace(/^#\/?/, "");
     if (!rawHash) {
@@ -467,6 +476,10 @@ class KubeMasteryApp {
     } else if (route === "tasks") {
       const pageId = parts[1] || "tools-install-kubectl";
       this.navigateTo("tasks", { taskPageId: pageId }, false);
+    } else if (route === "ckad-labs") {
+      const ckadTab = parts[1] || this.ckadTab || "exam";
+      const blueprintId = parts[2] || null;
+      this.navigateTo("ckad-labs", { ckadTab, blueprintId }, false);
     } else if (route === "cli-playground") {
       const drillIndex = parts[1] ? parseInt(parts[1], 10) : 0;
       this.navigateTo("cli-playground", { drillIndex: isNaN(drillIndex) ? 0 : drillIndex }, false);
@@ -485,11 +498,20 @@ class KubeMasteryApp {
     if (params.conceptPageId !== undefined) this.activeConceptPageId = params.conceptPageId;
     if (params.taskPageId !== undefined) this.activeTaskPageId = params.taskPageId;
     if (params.drillIndex !== undefined) this.cliDrillIndex = params.drillIndex;
+    if (params.ckadTab !== undefined && ["exam", "sets", "analytics"].includes(params.ckadTab)) {
+      this.ckadTab = params.ckadTab;
+    }
+    if (params.blueprintId) {
+      this.selectOrBuildCkadBlueprint(params.blueprintId, params.seed || null);
+    }
 
     if (view === "concepts") {
       this.isConceptsDropdownOpen = true;
     } else if (view === "tasks") {
       this.isTasksDropdownOpen = true;
+    } else if (view === "ckad-labs") {
+      this.ensureCkadTimerLoop();
+      this.syncCkadBackendStatus();
     }
 
     if (updateHash) {
@@ -504,6 +526,10 @@ class KubeMasteryApp {
         if (this.activeConceptPageId) newHash = `#/concepts/${this.activeConceptPageId}`;
       } else if (view === "tasks") {
         if (this.activeTaskPageId) newHash = `#/tasks/${this.activeTaskPageId}`;
+      } else if (view === "ckad-labs") {
+        if (this.ckadTab && this.ckadTab !== "exam") {
+          newHash = `#/ckad-labs/${this.ckadTab}`;
+        }
       } else if (view === "cli-playground") {
         if (this.cliDrillIndex > 0) newHash = `#/cli-playground/${this.cliDrillIndex}`;
       }
@@ -514,6 +540,10 @@ class KubeMasteryApp {
     this.updateActiveNavButtons();
     this.render();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  updateActiveNav() {
+    return this.updateActiveNavButtons();
   }
 
   updateActiveNavButtons() {
@@ -643,6 +673,9 @@ class KubeMasteryApp {
       case "tasks":
         this.renderTasksView(container);
         break;
+      case "ckad-labs":
+        container.innerHTML = this.renderCkadLabsView();
+        break;
       case "cli-playground":
         container.innerHTML = this.renderCliPlaygroundView();
         this.bindCliPlaygroundEvents();
@@ -658,11 +691,16 @@ class KubeMasteryApp {
   // ===========================================================================
   // VIEW: DASHBOARD
   // ===========================================================================
+  renderDashboard() {
+    return this.renderDashboardView();
+  }
+
   renderDashboardView() {
     const state = window.storage.getState();
     const courses = window.courseData || [];
     const conceptsIndex = window.KUBE_CONCEPTS_INDEX || { pages: [] };
     const tasksIndex = window.KUBE_TASKS_INDEX || { pages: [] };
+    const ckadCatalog = window.CKAD_LABS_DATA || { blueprints: [], domains: [] };
 
     let totalUnits = 0;
     courses.forEach(c => {
@@ -694,8 +732,44 @@ class KubeMasteryApp {
               เตรียมสอบ Kubernetes สู่ระดับมืออาชีพ
             </h1>
             <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              แพลตฟอร์มติวสอบและคลังเอกสารทางการฉบับสมบูรณ์ แปลเนื้อหาโดยละเอียดจาก kubernetes.io ทั้ง Concepts, Tasks, หลักสูตร CKAD, CKA และ CLI Speed Drills
+              แพลตฟอร์มติวสอบและคลังเอกสารทางการฉบับสมบูรณ์ แปลเนื้อหาโดยละเอียดจาก kubernetes.io ทั้ง Concepts, Tasks, หลักสูตร CKAD, CKA, สนามสอบจริง CKAD Hands-On Labs และ CLI Speed Drills
             </p>
+          </div>
+        </div>
+
+        <!-- Prominent CKAD Hands-On Exam Labs Banner Card -->
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-950 via-blue-950 to-slate-900 border border-indigo-500/40 p-6 sm:p-7 text-white shadow-xl">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div class="space-y-3 max-w-3xl">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-black uppercase tracking-wider">
+                  🧪 Real Terminal + AI Auto-Grader
+                </span>
+                <span class="px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold">
+                  100% Official CNCF CKAD 5 Domains (${ckadCatalog.blueprints.length || 20} Blueprints • สุ่มโจทย์ไม่จำกัด)
+                </span>
+              </div>
+              <h2 class="text-xl sm:text-2xl font-black tracking-tight text-white">
+                🧪 CKAD Hands-On Exam Labs (ทำข้อสอบจริงผ่านโปรแกรม Terminal ของคุณ)
+              </h2>
+              <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                ฝึกทำโจทย์ CKAD เสมือนสอบจริงครบทั้ง 5 หมวด: กดปุ่มให้ระบบสร้างโฟลเดอร์โจทย์ <code class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono">~/ckad-workspace/</code> และคลัสเตอร์จำลองบนเครื่อง ➔ เปิดโปรแกรม Terminal ของคุณพิมพ์ <code class="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">kubectl</code> แก้โจทย์จริง ➔ กดตรวจคำตอบพร้อมดูวิเคราะห์จุดผิดราย Checkpoint และเวลาที่ใช้!
+              </p>
+            </div>
+            <div class="flex flex-wrap sm:flex-col gap-2.5 shrink-0">
+              <button onclick="window.app.navigateTo('ckad-labs', { ckadTab: 'exam' })" class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                <span>🖥️ เข้าสู่สนามสอบ CKAD Labs</span>
+                <span>➔</span>
+              </button>
+              <div class="flex items-center gap-2">
+                <button onclick="window.app.navigateTo('ckad-labs', { ckadTab: 'sets' })" class="flex-1 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-slate-200 transition-all cursor-pointer">
+                  📋 ชุดข้อสอบ &amp; เลือกหมวด
+                </button>
+                <button onclick="window.app.navigateTo('ckad-labs', { ckadTab: 'analytics' })" class="flex-1 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-slate-200 transition-all cursor-pointer">
+                  📊 สถิติ &amp; วิเคราะห์จุดผิด
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2129,6 +2203,1583 @@ class KubeMasteryApp {
   openCliDrillByIndex(idx) {
     this.cliDrillIndex = idx;
     this.navigateTo("cli-playground", { drillIndex: idx });
+  }
+
+  // ===========================================================================
+  // VIEW: CKAD HANDS-ON EXAM LABS (REAL TERMINAL + AI AUTO-GRADER)
+  // ===========================================================================
+  initCkadLabsState() {
+    this.CKAD_ANALYTICS_KEY = "kubemastery_ckad_analytics_v1";
+    this.CKAD_CUSTOM_SETS_KEY = "kubemastery_ckad_custom_sets_v1";
+
+    this.ckadTab = "exam"; // "exam" | "sets" | "analytics"
+    this.ckadBackendOnline = true;
+    this.ckadBackendChecked = false;
+    this.ckadWorkspaceRoot = "/home/nopakun-sangon/ckad-workspace";
+    this.ckadBusySetup = false;
+    this.ckadBusyVerify = false;
+
+    this.ckadCustomSets = this.loadCkadCustomSets();
+    this.ckadAnalytics = this.loadCkadLocalAnalytics();
+    this.ckadEnvStatus = {};
+    this.ckadGradeResults = {};
+
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    this.ckadTimerInterval = null;
+
+    const catalog = window.CKAD_LABS_DATA || { domains: [], blueprints: [], initialSets: [] };
+    const defaultSetDef = (catalog.initialSets && catalog.initialSets[0]) || {
+      id: "set-a",
+      badge: "Exam Set A",
+      title: "CKAD Full Standard Mock Exam #1",
+      description: "ชุดข้อสอบมาตรฐานเสมือนจริง 16 ข้อ ครอบคลุมครบทั้ง 5 หมวดตามสัดส่วนคะแนนสอบจริงของ CNCF",
+      durationMinutes: 120,
+      seedBase: 100,
+      questionIds: (catalog.blueprints || []).slice(0, 16).map((b) => b.id)
+    };
+
+    this.ckadActiveSet = this.buildCkadSetInstance(defaultSetDef, false);
+    this.ckadQuestionIndex = 0;
+  }
+
+  createDefaultCkadAnalytics() {
+    return {
+      updatedAt: new Date().toISOString(),
+      attempts: [],
+      setHistory: [],
+      domainStats: {
+        "domain-1": { attempts: 0, passed: 0, totalEarned: 0, totalMax: 0 },
+        "domain-2": { attempts: 0, passed: 0, totalEarned: 0, totalMax: 0 },
+        "domain-3": { attempts: 0, passed: 0, totalEarned: 0, totalMax: 0 },
+        "domain-4": { attempts: 0, passed: 0, totalEarned: 0, totalMax: 0 },
+        "domain-5": { attempts: 0, passed: 0, totalEarned: 0, totalMax: 0 }
+      },
+      mistakes: {}
+    };
+  }
+
+  loadCkadLocalAnalytics() {
+    try {
+      const raw = localStorage.getItem(this.CKAD_ANALYTICS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const def = this.createDefaultCkadAnalytics();
+        return {
+          ...def,
+          ...parsed,
+          attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [],
+          setHistory: Array.isArray(parsed.setHistory) ? parsed.setHistory : [],
+          domainStats: { ...def.domainStats, ...(parsed.domainStats || {}) },
+          mistakes: parsed.mistakes && typeof parsed.mistakes === "object" ? parsed.mistakes : {}
+        };
+      }
+    } catch (_) {}
+    return this.createDefaultCkadAnalytics();
+  }
+
+  saveCkadLocalAnalytics(analyticsObj = null) {
+    if (analyticsObj) {
+      const def = this.createDefaultCkadAnalytics();
+      this.ckadAnalytics = {
+        ...def,
+        ...analyticsObj,
+        attempts: Array.isArray(analyticsObj.attempts) ? analyticsObj.attempts : [],
+        setHistory: Array.isArray(analyticsObj.setHistory) ? analyticsObj.setHistory : [],
+        domainStats: { ...def.domainStats, ...(analyticsObj.domainStats || {}) },
+        mistakes: analyticsObj.mistakes && typeof analyticsObj.mistakes === "object" ? analyticsObj.mistakes : {}
+      };
+    }
+    try {
+      localStorage.setItem(this.CKAD_ANALYTICS_KEY, JSON.stringify(this.ckadAnalytics));
+    } catch (_) {}
+  }
+
+  loadCkadCustomSets() {
+    try {
+      const raw = localStorage.getItem(this.CKAD_CUSTOM_SETS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  saveCkadCustomSets() {
+    try {
+      localStorage.setItem(this.CKAD_CUSTOM_SETS_KEY, JSON.stringify(this.ckadCustomSets));
+    } catch (_) {}
+  }
+
+  getCkadApiUrl(endpointPath) {
+    if (
+      typeof window !== "undefined" &&
+      window.location &&
+      typeof window.location.origin === "string" &&
+      /^https?:\/\//i.test(window.location.origin) &&
+      !window.location.origin.includes("null")
+    ) {
+      return `${window.location.origin}${endpointPath}`;
+    }
+    return `http://localhost:3080${endpointPath}`;
+  }
+
+  async syncCkadBackendStatus() {
+    if (typeof window !== "undefined" && window.location && /github\.io/i.test(window.location.hostname || "")) {
+      this.ckadBackendOnline = false;
+      this.ckadBackendChecked = true;
+      return;
+    }
+    if (typeof fetch !== "function") {
+      this.ckadBackendOnline = false;
+      this.ckadBackendChecked = true;
+      return;
+    }
+    try {
+      const statusRes = await fetch(this.getCkadApiUrl("/api/lab/status"));
+      if (statusRes && statusRes.ok) {
+        const statusData = await statusRes.json();
+        this.ckadBackendOnline = Boolean(statusData && statusData.ok);
+        if (statusData && statusData.workspaceRoot) {
+          this.ckadWorkspaceRoot = statusData.workspaceRoot;
+        }
+      } else {
+        this.ckadBackendOnline = false;
+      }
+
+      const anaRes = await fetch(this.getCkadApiUrl("/api/lab/analytics"));
+      if (anaRes && anaRes.ok) {
+        const anaData = await anaRes.json();
+        if (anaData && anaData.ok && anaData.analytics) {
+          if ((anaData.analytics.attempts || []).length >= (this.ckadAnalytics.attempts || []).length) {
+            this.saveCkadLocalAnalytics(anaData.analytics);
+          }
+          if (this.currentView === "ckad-labs" && this.ckadTab === "analytics") {
+            this.render();
+          }
+        }
+      }
+    } catch (_) {
+      this.ckadBackendOnline = false;
+    } finally {
+      this.ckadBackendChecked = true;
+    }
+  }
+
+  buildCkadSetInstance(setDef, randomizeSeeds = false) {
+    const catalog = window.CKAD_LABS_DATA || { blueprints: [], buildQuestion: () => null };
+    const baseSeed = randomizeSeeds
+      ? Math.floor(200 + Math.random() * 8000)
+      : Number(setDef.seedBase) || 100;
+
+    const qIds = Array.isArray(setDef.questionIds) && setDef.questionIds.length
+      ? setDef.questionIds
+      : (catalog.blueprints || []).map((b) => b.id);
+
+    const questions = qIds
+      .map((qId, idx) => {
+        const seed = baseSeed + idx + 1;
+        if (typeof catalog.buildQuestion === "function") {
+          return catalog.buildQuestion(qId, seed);
+        }
+        const bp = (catalog.blueprints || []).find((b) => b.id === qId) || (catalog.blueprints || [])[0];
+        return bp ? bp.build(seed) : null;
+      })
+      .filter(Boolean);
+
+    return {
+      id: setDef.id || "custom-set",
+      badge: setDef.badge || "Custom Set",
+      title: setDef.title || "CKAD Practice Set",
+      description: setDef.description || "ชุดฝึกทำข้อสอบ CKAD ผ่าน Terminal จริง",
+      durationMinutes: setDef.durationMinutes || questions.length * 6,
+      seedBase: baseSeed,
+      questions
+    };
+  }
+
+  getActiveCkadQuestion() {
+    if (!this.ckadActiveSet || !Array.isArray(this.ckadActiveSet.questions) || !this.ckadActiveSet.questions.length) {
+      const catalog = window.CKAD_LABS_DATA;
+      if (catalog && catalog.initialSets && catalog.initialSets[0]) {
+        this.ckadActiveSet = this.buildCkadSetInstance(catalog.initialSets[0], false);
+      }
+    }
+    const questions = (this.ckadActiveSet && this.ckadActiveSet.questions) || [];
+    if (this.ckadQuestionIndex < 0 || this.ckadQuestionIndex >= questions.length) {
+      this.ckadQuestionIndex = 0;
+    }
+    return questions[this.ckadQuestionIndex] || null;
+  }
+
+  getCkadQuestionKey(q) {
+    if (!q) return "none";
+    return `${q.id}:${q.seed || 100}`;
+  }
+
+  ensureCkadTimerLoop() {
+    if (this.ckadTimerInterval) return;
+    this.ckadTimerInterval = setInterval(() => {
+      if (this.currentView === "ckad-labs" && this.ckadTab === "exam" && this.ckadTimerRunning) {
+        this.ckadTimerSeconds += 1;
+        const el = document.getElementById("ckad-q-timer");
+        if (el) {
+          el.textContent = this.formatCkadTime(this.ckadTimerSeconds);
+        }
+      }
+    }, 1000);
+    if (this.ckadTimerInterval && typeof this.ckadTimerInterval.unref === "function") {
+      this.ckadTimerInterval.unref();
+    }
+  }
+
+  formatCkadTime(totalSeconds) {
+    const sec = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+    const ss = String(sec % 60).padStart(2, "0");
+    return `${mm}:${ss}`;
+  }
+
+  toggleCkadTimer() {
+    this.ckadTimerRunning = !this.ckadTimerRunning;
+    this.render();
+  }
+
+  resetCkadTimer() {
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    const el = document.getElementById("ckad-q-timer");
+    if (el) el.textContent = "00:00";
+    this.render();
+  }
+
+  switchCkadTab(tab) {
+    if (!["exam", "sets", "analytics"].includes(tab)) return;
+    this.ckadTab = tab;
+    if (tab === "analytics") {
+      this.syncCkadBackendStatus();
+    }
+    this.navigateTo("ckad-labs", { ckadTab: tab });
+  }
+
+  selectCkadQuestionIndex(idx) {
+    const questions = (this.ckadActiveSet && this.ckadActiveSet.questions) || [];
+    if (idx < 0 || idx >= questions.length) return;
+    this.ckadQuestionIndex = idx;
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    this.render();
+  }
+
+  prevCkadQuestion() {
+    if (this.ckadQuestionIndex > 0) {
+      this.selectCkadQuestionIndex(this.ckadQuestionIndex - 1);
+    }
+  }
+
+  nextCkadQuestion() {
+    const questions = (this.ckadActiveSet && this.ckadActiveSet.questions) || [];
+    if (this.ckadQuestionIndex < questions.length - 1) {
+      this.selectCkadQuestionIndex(this.ckadQuestionIndex + 1);
+    }
+  }
+
+  randomizeCurrentQuestion() {
+    const q = this.getActiveCkadQuestion();
+    const catalog = window.CKAD_LABS_DATA;
+    if (!q || !catalog || typeof catalog.buildQuestion !== "function") return null;
+
+    const newSeed = Math.floor(200 + Math.random() * 8900);
+    const rebuilt = catalog.buildQuestion(q.id, newSeed);
+    this.ckadActiveSet.questions[this.ckadQuestionIndex] = rebuilt;
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    this.showToast(`🎲 สุ่มพารามิเตอร์ใหม่สำหรับข้อ ${rebuilt.id.toUpperCase()} (Namespace: ${rebuilt.namespace}) เรียบร้อย!`, "info");
+    this.render();
+    return rebuilt;
+  }
+
+  randomizeCkadQuestion() {
+    return this.randomizeCurrentQuestion();
+  }
+
+  startCkadExamSet(setId, randomizeSeeds = false) {
+    const catalog = window.CKAD_LABS_DATA || { initialSets: [] };
+    const allSets = [...(catalog.initialSets || []), ...(this.ckadCustomSets || [])];
+    const targetDef = allSets.find((s) => s.id === setId) || allSets[0];
+    if (!targetDef) return;
+
+    this.ckadActiveSet = this.buildCkadSetInstance(targetDef, randomizeSeeds);
+    this.ckadQuestionIndex = 0;
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    this.ckadTab = "exam";
+    this.showToast(
+      randomizeSeeds
+        ? `🎲 สุ่มค่าพารามิเตอร์ใหม่ให้ชุด ${targetDef.badge} ทั้งชุดเรียบร้อยแล้ว!`
+        : `🚀 เริ่มชุดข้อสอบ ${targetDef.badge}: ${targetDef.title}`,
+      "success"
+    );
+    this.navigateTo("ckad-labs", { ckadTab: "exam" });
+  }
+
+  generateNewRandomExamSet(questionCount = 16) {
+    const catalog = window.CKAD_LABS_DATA || { blueprints: [] };
+    const allIds = (catalog.blueprints || []).map((b) => b.id);
+    if (!allIds.length) return null;
+
+    // Shuffle blueprint IDs while preserving domain order after selection
+    const shuffled = [...allIds].sort(() => Math.random() - 0.5);
+    const chosenIds = shuffled.slice(0, Math.min(questionCount, allIds.length)).sort();
+    const randNum = Math.floor(100 + Math.random() * 900);
+    const seedBase = Math.floor(500 + Math.random() * 8500);
+
+    const newSetDef = {
+      id: `custom-set-${randNum}-${Date.now().toString(36)}`,
+      badge: `Dynamic Set #${randNum}`,
+      title: `CKAD Randomized Mock Exam #${randNum}`,
+      description: `ชุดข้อสอบสุ่มใหม่ ${chosenIds.length} ข้อ (สุ่มชื่อ Namespace, พอด, พอร์ต และค่าพารามิเตอร์ชุดใหม่ทั้งหมด Seed #${seedBase})`,
+      durationMinutes: chosenIds.length * 7,
+      seedBase,
+      questionIds: chosenIds,
+      createdAt: new Date().toISOString()
+    };
+
+    this.ckadCustomSets.unshift(newSetDef);
+    if (this.ckadCustomSets.length > 15) {
+      this.ckadCustomSets = this.ckadCustomSets.slice(0, 15);
+    }
+    this.saveCkadCustomSets();
+
+    this.ckadActiveSet = this.buildCkadSetInstance(newSetDef, false);
+    this.ckadQuestionIndex = 0;
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    this.ckadTab = "exam";
+    this.showToast(`✨ สร้างชุดข้อสอบใหม่ ${newSetDef.badge} (${chosenIds.length} ข้อ) เรียบร้อยแล้ว!`, "success");
+    this.navigateTo("ckad-labs", { ckadTab: "exam" });
+    return this.ckadActiveSet;
+  }
+
+  generateNewExamSet(questionCount = 16) {
+    return this.generateNewRandomExamSet(questionCount);
+  }
+
+  startCkadDomainPractice(domainId, randomizeSeeds = false) {
+    const catalog = window.CKAD_LABS_DATA || { domains: [], blueprints: [] };
+    const dom = (catalog.domains || []).find((d) => d.id === domainId);
+    const domainBlueprints = (catalog.blueprints || []).filter((b) => b.domainId === domainId);
+    if (!domainBlueprints.length) return;
+
+    const practiceDef = {
+      id: `domain-practice-${domainId}`,
+      badge: dom ? `Domain ${dom.number} (${dom.weight}%)` : "Topic Focus",
+      title: dom ? `${dom.title} — ${dom.titleTh}` : "Domain Practice",
+      description: dom ? dom.topics : "ฝึกเฉพาะหมวดหมู่ข้อสอบ",
+      durationMinutes: domainBlueprints.length * 6,
+      seedBase: randomizeSeeds ? Math.floor(300 + Math.random() * 8000) : 150,
+      questionIds: domainBlueprints.map((b) => b.id)
+    };
+
+    this.ckadActiveSet = this.buildCkadSetInstance(practiceDef, randomizeSeeds);
+    this.ckadQuestionIndex = 0;
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    this.ckadTab = "exam";
+    this.showToast(`🎯 เริ่มฝึกเฉพาะหมวด ${practiceDef.badge} (${domainBlueprints.length} ข้อ)`, "info");
+    this.navigateTo("ckad-labs", { ckadTab: "exam" });
+  }
+
+  startCkadWeaknessPractice() {
+    const catalog = window.CKAD_LABS_DATA || { blueprints: [] };
+    const unresolvedQuestionIds = new Set();
+
+    Object.values(this.ckadAnalytics.mistakes || {}).forEach((m) => {
+      if (m && !m.resolved && m.questionId) {
+        unresolvedQuestionIds.add(m.questionId);
+      }
+    });
+
+    (this.ckadAnalytics.attempts || []).forEach((att) => {
+      if (att && !att.passedAll && att.questionId) {
+        unresolvedQuestionIds.add(att.questionId);
+      }
+    });
+
+    let targetIds = Array.from(unresolvedQuestionIds);
+    const hadMistakes = targetIds.length > 0;
+    if (!targetIds.length) {
+      // Default high-value tricky CKAD blueprints if no failed attempts yet
+      targetIds = ["ckad-01", "ckad-05", "ckad-10", "ckad-14", "ckad-15", "ckad-18", "ckad-20"];
+    }
+
+    const weaknessDef = {
+      id: "weakness-retry-set",
+      badge: "🔥 Weakness Focus",
+      title: hadMistakes
+        ? `โหมดซ้อมเฉพาะข้อที่เคยทำผิด (${targetIds.length} ข้อ)`
+        : `โหมดซ้อมโจทย์ปราบเซียน CKAD (${targetIds.length} ข้อ)`,
+      description: "ดึงข้อที่คุณเคยทำพลาดหรือใช้เวลาเกินเกณฑ์มาสุ่มพารามิเตอร์ใหม่เพื่อฝึกซ้ำให้แม่นยำ",
+      durationMinutes: targetIds.length * 6,
+      seedBase: Math.floor(400 + Math.random() * 8000),
+      questionIds: targetIds
+    };
+
+    this.ckadActiveSet = this.buildCkadSetInstance(weaknessDef, true);
+    this.ckadQuestionIndex = 0;
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    this.ckadTab = "exam";
+    this.showToast(`🔥 เปิดโหมดซ้อมจุดอ่อน (${targetIds.length} ข้อ) พร้อมสุ่มค่าโจทย์ใหม่!`, "info");
+    this.navigateTo("ckad-labs", { ckadTab: "exam" });
+  }
+
+  selectOrBuildCkadBlueprint(blueprintId, customSeed = null) {
+    const catalog = window.CKAD_LABS_DATA;
+    if (!catalog || !Array.isArray(catalog.blueprints)) return;
+    const bp = catalog.blueprints.find((b) => b.id === blueprintId);
+    if (!bp) return;
+
+    const existingIdx = (this.ckadActiveSet?.questions || []).findIndex((q) => q.id === blueprintId);
+    if (existingIdx !== -1) {
+      this.ckadQuestionIndex = existingIdx;
+      if (customSeed !== null) {
+        this.ckadActiveSet.questions[existingIdx] = catalog.buildQuestion(blueprintId, customSeed);
+      }
+    } else {
+      const seed = customSeed !== null ? customSeed : Math.floor(100 + Math.random() * 8000);
+      const built = catalog.buildQuestion(blueprintId, seed);
+      if (!this.ckadActiveSet || !Array.isArray(this.ckadActiveSet.questions)) {
+        this.ckadActiveSet = {
+          id: "single-practice",
+          badge: "Focused Lab",
+          title: built.title,
+          description: built.domainTitle,
+          durationMinutes: 60,
+          questions: [built]
+        };
+        this.ckadQuestionIndex = 0;
+      } else {
+        this.ckadActiveSet.questions.push(built);
+        this.ckadQuestionIndex = this.ckadActiveSet.questions.length - 1;
+      }
+    }
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+  }
+
+  openCkadLabQuestion(blueprintId, customSeed = null) {
+    this.selectOrBuildCkadBlueprint(blueprintId, customSeed);
+    this.ckadTab = "exam";
+    this.navigateTo("ckad-labs", { ckadTab: "exam" });
+  }
+
+  retryCkadQuestion(blueprintId, exactSeed = null) {
+    const seedToUse = exactSeed !== null && exactSeed !== undefined
+      ? Number(exactSeed)
+      : Math.floor(200 + Math.random() * 8900);
+    this.selectOrBuildCkadBlueprint(blueprintId, seedToUse);
+    this.ckadTab = "exam";
+    this.showToast(
+      exactSeed !== null && exactSeed !== undefined
+        ? `🔁 เปิดข้อ ${blueprintId.toUpperCase()} (Seed #${seedToUse} เดิม) เพื่อซ้อมซ้ำ!`
+        : `🎲 สุ่มโจทย์คล้ายข้อ ${blueprintId.toUpperCase()} ด้วยพารามิเตอร์ใหม่ (Seed #${seedToUse})!`,
+      "info"
+    );
+    this.navigateTo("ckad-labs", { ckadTab: "exam" });
+  }
+
+  async prepareCkadLabEnv() {
+    const q = this.getActiveCkadQuestion();
+    if (!q || this.ckadBusySetup) return null;
+
+    this.ckadBusySetup = true;
+    const qKey = this.getCkadQuestionKey(q);
+    let setupResult = null;
+
+    if (typeof fetch === "function") {
+      try {
+        const res = await fetch(this.getCkadApiUrl("/api/lab/setup"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q })
+        });
+        if (res && res.ok) {
+          setupResult = await res.json();
+          this.ckadBackendOnline = true;
+        }
+      } catch (_) {
+        this.ckadBackendOnline = false;
+      }
+    }
+
+    if (!setupResult || !setupResult.ok) {
+      const filesCreated = Object.keys(q.setupSpec?.files || {});
+      const namespaces = q.setupSpec?.namespaces || [q.namespace];
+      setupResult = {
+        ok: true,
+        simulated: true,
+        workspacePath: `${this.ckadWorkspaceRoot}/${q.workspaceDir || q.id}`,
+        filesCreated,
+        namespaces,
+        message: `เตรียมสภาพแวดล้อมจำลองสำหรับข้อ ${q.id.toUpperCase()} เรียบร้อยแล้ว`
+      };
+    }
+
+    this.ckadEnvStatus[qKey] = {
+      ready: true,
+      simulated: Boolean(setupResult.simulated),
+      workspacePath: setupResult.workspacePath || `${this.ckadWorkspaceRoot}/${q.workspaceDir || q.id}`,
+      filesCreated: setupResult.filesCreated || [],
+      namespaces: setupResult.namespaces || [q.namespace],
+      initialResourceCount: (q.setupSpec?.resources || []).length,
+      setupAt: new Date().toISOString(),
+      message: setupResult.message
+    };
+
+    this.ckadTimerSeconds = 0;
+    this.ckadTimerRunning = true;
+    this.ckadBusySetup = false;
+
+    this.showToast(`🛠️ ${setupResult.message || "เตรียม Local Environment พร้อมแล้ว!"}`, "success");
+    this.render();
+    return setupResult;
+  }
+
+  recordLocalCkadAttempt(q, results, timeSpentSeconds, setId) {
+    const totalChecks = results.length;
+    const passedCount = results.filter((r) => r.passed).length;
+    const passedAll = totalChecks > 0 && passedCount === totalChecks;
+    const maxScore = Number(q.weight) || 5;
+    const earnedScore = totalChecks > 0 ? Math.round((passedCount / totalChecks) * maxScore * 10) / 10 : 0;
+
+    const failedChecks = results
+      .filter((r) => !r.passed)
+      .map((r) => ({ id: r.id, title: r.title, failHint: r.failHint }));
+
+    const analytics = this.ckadAnalytics || this.createDefaultCkadAnalytics();
+    analytics.attempts.unshift({
+      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      questionId: q.id,
+      seed: q.seed,
+      title: q.title,
+      domainId: q.domainId,
+      domainTitle: q.domainTitle,
+      setId: setId || "practice",
+      passedAll,
+      passedCount,
+      totalChecks,
+      earnedScore,
+      maxScore,
+      timeSpentSeconds: Number(timeSpentSeconds) || 0,
+      failedChecks,
+      timestamp: new Date().toISOString()
+    });
+
+    const domId = q.domainId || "domain-1";
+    if (!analytics.domainStats[domId]) {
+      analytics.domainStats[domId] = { attempts: 0, passed: 0, totalEarned: 0, totalMax: 0 };
+    }
+    analytics.domainStats[domId].attempts += 1;
+    if (passedAll) analytics.domainStats[domId].passed += 1;
+    analytics.domainStats[domId].totalEarned =
+      Math.round((analytics.domainStats[domId].totalEarned + earnedScore) * 10) / 10;
+    analytics.domainStats[domId].totalMax += maxScore;
+
+    for (const r of results) {
+      const mKey = `${q.id}:${r.id}`;
+      if (!r.passed) {
+        const prev = analytics.mistakes[mKey] || {
+          key: mKey,
+          questionId: q.id,
+          questionTitle: q.title,
+          domainId: q.domainId,
+          domainTitle: q.domainTitle,
+          checkId: r.id,
+          checkTitle: r.title,
+          failHint: r.failHint,
+          count: 0,
+          resolved: false
+        };
+        prev.count += 1;
+        prev.resolved = false;
+        prev.lastSeen = new Date().toISOString();
+        prev.failHint = r.failHint;
+        analytics.mistakes[mKey] = prev;
+      } else if (analytics.mistakes[mKey]) {
+        analytics.mistakes[mKey].resolved = true;
+        analytics.mistakes[mKey].resolvedAt = new Date().toISOString();
+      }
+    }
+
+    this.saveCkadLocalAnalytics(analytics);
+    return {
+      ok: true,
+      questionId: q.id,
+      passedAll,
+      passedCount,
+      totalChecks,
+      earnedScore,
+      maxScore,
+      results,
+      analytics
+    };
+  }
+
+  async verifyCkadLabAnswer(simulatedMode = null) {
+    const q = this.getActiveCkadQuestion();
+    if (!q || this.ckadBusyVerify) return null;
+
+    this.ckadBusyVerify = true;
+    const qKey = this.getCkadQuestionKey(q);
+    const timeSpentSeconds = this.ckadTimerSeconds || 0;
+    const setId = (this.ckadActiveSet && this.ckadActiveSet.id) || "practice";
+    let verifyResponse = null;
+
+    if (!simulatedMode && typeof fetch === "function") {
+      try {
+        const res = await fetch(this.getCkadApiUrl("/api/lab/verify"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: q,
+            timeSpentSeconds,
+            setId,
+            recordAnalytics: true
+          })
+        });
+        if (res && res.ok) {
+          verifyResponse = await res.json();
+          this.ckadBackendOnline = true;
+        }
+      } catch (_) {
+        this.ckadBackendOnline = false;
+      }
+    }
+
+    if (!verifyResponse || !verifyResponse.ok) {
+      const checks = q.verifySpec?.checks || [];
+      const results = checks.map((chk, idx) => {
+        const pass = simulatedMode === "pass" ? true : simulatedMode === "partial" ? idx < checks.length - 1 : false;
+        return {
+          id: chk.id,
+          title: chk.title,
+          passed: pass,
+          detail: pass ? "ผ่านเกณฑ์การตรวจสอบ" : chk.failHint,
+          failHint: pass ? null : chk.failHint
+        };
+      });
+      verifyResponse = this.recordLocalCkadAttempt(q, results, timeSpentSeconds, setId);
+    } else if (verifyResponse.analytics) {
+      this.saveCkadLocalAnalytics(verifyResponse.analytics);
+    }
+
+    verifyResponse.timeSpentSeconds = timeSpentSeconds;
+    this.ckadGradeResults[qKey] = verifyResponse;
+    this.ckadBusyVerify = false;
+
+    if (verifyResponse.passedAll) {
+      if (window.soundFx && window.soundFx.playCorrect) window.soundFx.playCorrect();
+      if (window.storage && typeof window.storage.addXP === "function") window.storage.addXP(25);
+      this.showToast(`🎉 ตรวจผ่านครบทุกข้อ! ได้รับ +${verifyResponse.earnedScore}% คะแนน`, "success");
+    } else {
+      if (window.soundFx && window.soundFx.playWrong) window.soundFx.playWrong();
+      this.showToast(`⚠️ ได้ ${verifyResponse.earnedScore} / ${verifyResponse.maxScore}% — ดูคำแนะนำจุดที่ต้องแก้ด้านล่าง`, "error");
+    }
+
+    this.render();
+    return verifyResponse;
+  }
+
+  async resetCkadAnalytics() {
+    const shouldReset = typeof confirm === "function"
+      ? confirm("คุณต้องการล้างสถิติการสอบและประวัติข้อที่ทำผิดทั้งหมดหรือไม่?")
+      : true;
+    if (!shouldReset) return;
+
+    const fresh = this.createDefaultCkadAnalytics();
+    this.saveCkadLocalAnalytics(fresh);
+    this.ckadGradeResults = {};
+
+    if (typeof fetch === "function") {
+      try {
+        await fetch(this.getCkadApiUrl("/api/lab/analytics"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "reset" })
+        });
+      } catch (_) {}
+    }
+
+    this.showToast("🗑️ ล้างสถิติการสอบ CKAD Labs เรียบร้อยแล้ว", "info");
+    this.render();
+  }
+
+  renderCkadLabsView() {
+    const activeTab = this.ckadTab || "exam";
+
+    return `
+      <div class="space-y-5 animate-fadeIn max-w-6xl mx-auto w-full pb-16">
+        <!-- Top Header & 3 Sub-View Tabs -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div class="space-y-1.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/15 text-blue-600 dark:text-cyan-400 text-xs font-black">
+                  <span>🧪 CNCF CKAD Exam Simulator</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
+                  this.ckadBackendOnline
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                    : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                } text-xs font-bold">
+                  <span class="w-2 h-2 rounded-full ${this.ckadBackendOnline ? "bg-emerald-500" : "bg-amber-500"}"></span>
+                  <span>${this.ckadBackendOnline ? "Local Terminal Engine: เชื่อมต่อพร้อมใช้งาน" : "Browser Simulation Mode"}</span>
+                </span>
+              </div>
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                CKAD Hands-On Exam Labs (ทำข้อสอบผ่าน Terminal จริงของคุณ)
+              </h1>
+              <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                หน้าเว็บทำหน้าที่เป็น <strong class="text-slate-800 dark:text-slate-200">โจทย์ข้อสอบ + จับเวลา + ปุ่มสั่งเตรียม Local Env + ปุ่มสั่ง AI ตรวจผลจากคลัสเตอร์และไฟล์ใน Terminal จริงของคุณ</strong>
+              </p>
+            </div>
+
+            <!-- 3 Sub-View Tabs -->
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <button onclick="window.app.switchCkadTab('exam')"
+                class="px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "exam"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }">
+                🖥️ 1. หน้าโจทย์สอบจริง (Active Lab)
+              </button>
+              <button onclick="window.app.switchCkadTab('sets')"
+                class="px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "sets"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }">
+                📋 2. ชุดข้อสอบ &amp; เลือกหัวข้อ
+              </button>
+              <button onclick="window.app.switchCkadTab('analytics')"
+                class="px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "analytics"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }">
+                📊 3. สถิติ &amp; วิเคราะห์ข้อที่ผิด
+              </button>
+            </div>
+          </div>
+
+          ${!this.ckadBackendOnline ? `
+            <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                💡 <strong>หมายเหตุ (GitHub Pages / Offline Mode):</strong> หากต้องการให้ปุ่มที่ 1 สร้างโฟลเดอร์โจทย์ใน <code class="font-mono">~/ckad-workspace/</code> และตรวจคลัสเตอร์จาก Terminal ในเครื่องจริง ให้รัน <code class="px-1.5 py-0.5 rounded bg-slate-900 text-emerald-300 font-mono">./start.sh</code> แล้วเปิด <code class="font-mono">http://localhost:3080</code> (ในโหมดนี้คุณยังสามารถกดจำลองการเตรียม Env และตรวจคำตอบบนเบราว์เซอร์ได้ครบทุกปุ่ม!)
+              </div>
+            </div>
+          ` : ""}
+        </div>
+
+        ${activeTab === "exam" ? this.renderCkadActiveExamTab() : ""}
+        ${activeTab === "sets" ? this.renderCkadSetsAndTopicsTab() : ""}
+        ${activeTab === "analytics" ? this.renderCkadAnalyticsTab() : ""}
+      </div>
+    `;
+  }
+
+  renderCkadActiveExamTab() {
+    const activeSet = this.ckadActiveSet;
+    const questions = (activeSet && activeSet.questions) || [];
+    const q = this.getActiveCkadQuestion();
+    if (!q) {
+      return `<div class="p-8 text-center text-slate-400">ไม่พบข้อมูลโจทย์ CKAD Labs</div>`;
+    }
+
+    const qKey = this.getCkadQuestionKey(q);
+    const envState = this.ckadEnvStatus[qKey] || null;
+    const gradeResult = this.ckadGradeResults[qKey] || null;
+
+    // Calculate set progress
+    let passedInSet = 0;
+    let earnedInSet = 0;
+    let maxInSet = 0;
+    questions.forEach((item) => {
+      const k = this.getCkadQuestionKey(item);
+      const gr = this.ckadGradeResults[k];
+      maxInSet += Number(item.weight) || 5;
+      if (gr) {
+        if (gr.passedAll) passedInSet += 1;
+        earnedInSet += Number(gr.earnedScore) || 0;
+      }
+    });
+    const setScorePct = maxInSet > 0 ? Math.round((earnedInSet / maxInSet) * 100) : 0;
+
+    const wsDir = q.workspaceDir || q.id;
+    const quickCommands = `cd ~/ckad-workspace/${wsDir}\nkubectl get all -n ${q.namespace}`;
+
+    return `
+      <div class="space-y-4">
+        <!-- Question Switcher & Active Set Bar -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2.5">
+              <span class="px-3 py-1 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 font-black text-xs">
+                ชุดข้อสอบ: ${this.escapeHtml(activeSet.badge)} — ${this.escapeHtml(activeSet.title)}
+              </span>
+              <span class="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
+                ทำผ่านแล้ว <strong class="text-emerald-500">${passedInSet}/${questions.length}</strong> ข้อ
+              </span>
+              <span class="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
+                คะแนนสะสม <strong class="text-blue-500">${setScorePct}%</strong> (${Math.round(earnedInSet * 10) / 10}/${maxInSet})
+              </span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button onclick="window.app.generateNewRandomExamSet(16)"
+                class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow transition-all cursor-pointer">
+                🎲 สุ่มชุดใหม่
+              </button>
+              <button onclick="window.app.switchCkadTab('sets')"
+                class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer">
+                📋 เปลี่ยนชุด/หมวด
+              </button>
+            </div>
+          </div>
+
+          <!-- Question Number Pills (Q1 .. QN) -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1">
+            ${questions
+              .map((item, idx) => {
+                const k = this.getCkadQuestionKey(item);
+                const gr = this.ckadGradeResults[k];
+                const isCurr = idx === this.ckadQuestionIndex;
+                let pillStyle =
+                  "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700";
+                let statusIcon = "";
+                if (gr && gr.passedAll) {
+                  pillStyle = "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/40";
+                  statusIcon = " ✅";
+                } else if (gr && !gr.passedAll) {
+                  pillStyle = "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40";
+                  statusIcon = " ❌";
+                }
+                if (isCurr) {
+                  pillStyle = "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/20";
+                }
+                return `
+                  <button onclick="window.app.selectCkadQuestionIndex(${idx})"
+                    class="px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${pillStyle}"
+                    title="${this.escapeHtml(item.id.toUpperCase() + ": " + item.title)}">
+                    Q${idx + 1}${statusIcon}
+                  </button>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
+
+        <!-- Question Stopwatch Timer & Variant Generator Bar -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="px-3 py-1 rounded-xl bg-blue-500/15 text-blue-600 dark:text-cyan-400 font-black text-xs">
+              ข้อที่ ${this.ckadQuestionIndex + 1} / ${questions.length} (${this.escapeHtml(q.id.toUpperCase())})
+            </span>
+            <span class="text-xs font-bold text-slate-600 dark:text-slate-300">
+              หมวด: <strong class="text-blue-600 dark:text-cyan-400">${this.escapeHtml(q.domainTitle)}</strong>
+            </span>
+            <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 font-black text-xs">
+              น้ำหนักคะแนน: ${q.weight}%
+            </span>
+            <span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono text-[11px]">
+              Seed #${q.seed}
+            </span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2.5">
+            <!-- Stopwatch Timer -->
+            <div class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono flex items-center gap-2">
+              <span>⏱️ เวลาที่ใช้ข้อนี้:</span>
+              <strong id="ckad-q-timer" class="text-emerald-600 dark:text-emerald-400 text-sm">${this.formatCkadTime(this.ckadTimerSeconds)}</strong>
+              <span class="text-slate-400">(เป้าหมาย: ${q.targetMinutes || 6} นาที)</span>
+              <button onclick="window.app.toggleCkadTimer()" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:opacity-80 text-[10px] font-sans font-bold cursor-pointer" title="หยุด/เดินเวลาต่อ">
+                ${this.ckadTimerRunning ? "⏸️" : "▶️"}
+              </button>
+              <button onclick="window.app.resetCkadTimer()" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:opacity-80 text-[10px] font-sans font-bold cursor-pointer" title="รีเซ็ตเวลาข้อนี้">
+                🔄
+              </button>
+            </div>
+
+            <!-- Generate New Variant Button -->
+            <button onclick="window.app.randomizeCurrentQuestion()"
+              class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow transition-all cursor-pointer">
+              🎲 สุ่มพารามิเตอร์โจทย์นี้ใหม่ (Generate New Variant)
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Exam Question & 3-Step Real Terminal Workflow Card -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5 shadow-sm">
+          <!-- STEP 1 CARD: Prepare Local Environment -->
+          <div class="p-4 sm:p-5 rounded-2xl ${
+            envState && envState.ready
+              ? "bg-emerald-500/10 border border-emerald-500/40"
+              : "bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800"
+          } space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full ${envState && envState.ready ? "bg-emerald-500" : "bg-amber-500"} inline-block"></span>
+                  <span class="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                    🛠️ ขั้นที่ 1: เตรียมสภาพแวดล้อมสำหรับข้อนี้ (${
+                      envState && envState.ready
+                        ? "✅ เตรียม Local Environment พร้อมทำข้อสอบแล้ว!"
+                        : "รอกดปุ่มเตรียมสภาพแวดล้อมก่อนเริ่มทำ"
+                    })
+                  </span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                  Workspace Folder: ~/ckad-workspace/${this.escapeHtml(wsDir)} | Namespace: ${this.escapeHtml(q.namespace)}
+                </p>
+              </div>
+
+              <button onclick="window.app.prepareCkadLabEnv()"
+                class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-md shadow-blue-600/20 transition-all shrink-0 cursor-pointer">
+                ${envState && envState.ready ? "🔄 รีเซ็ต Local Env ข้อนี้ใหม่" : "🛠️ 1. กดให้ AI เตรียม Local Env บนเครื่อง"}
+              </button>
+            </div>
+
+            ${envState && envState.ready ? `
+              <div class="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-mono space-y-1">
+                <div class="font-bold text-emerald-300">✅ สร้างสภาพแวดล้อมสำหรับข้อ ${this.escapeHtml(q.id.toUpperCase())} บนเครื่องเรียบร้อยแล้ว:</div>
+                <div>📁 โฟลเดอร์โจทย์: <strong>${this.escapeHtml(envState.workspacePath)}</strong></div>
+                <div>📄 ไฟล์ YAML ตั้งต้น: <strong>${envState.filesCreated.length ? this.escapeHtml(envState.filesCreated.join(", ")) : "ไม่มีไฟล์ตั้งต้น (สร้างไฟล์ YAML ใหม่หรือรัน kubectl ได้เลย)"}</strong></div>
+                <div>☸️ Namespace ที่สร้างพร้อมแล้ว: <strong>${this.escapeHtml((envState.namespaces || [q.namespace]).join(", "))}</strong> (Initial Resources: ${envState.initialResourceCount || 0} รายการ)</div>
+              </div>
+            ` : ""}
+          </div>
+
+          <!-- QUESTION DETAILS CARD -->
+          <div class="space-y-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                ข้อที่ ${this.ckadQuestionIndex + 1}: ${this.escapeHtml(q.title)}
+              </h2>
+            </div>
+
+            <!-- PSI Bridge Style Context Pill Bar -->
+            <div class="p-3.5 rounded-2xl bg-slate-950 text-slate-200 font-mono text-xs flex flex-wrap items-center justify-between gap-2 border border-slate-800">
+              <div class="flex flex-wrap items-center gap-3">
+                <span>Task Namespace: <strong class="text-cyan-400 cursor-pointer underline decoration-dotted" onclick='window.app.copyText(${JSON.stringify(q.namespace)}, "คัดลอกชื่อ Namespace แล้ว!")'>${this.escapeHtml(q.namespace)}</strong></span>
+                <span class="text-slate-600">|</span>
+                <span>Working Dir: <strong class="text-amber-300 cursor-pointer underline decoration-dotted" onclick='window.app.copyText(${JSON.stringify(`~/ckad-workspace/${wsDir}`)}, "คัดลอกพาธโฟลเดอร์โจทย์แล้ว!")'>~/ckad-workspace/${this.escapeHtml(wsDir)}</strong></span>
+              </div>
+              <button onclick='window.app.copyText(${JSON.stringify(quickCommands)}, "คัดลอกคำสั่งเริ่มต้นแล้ว!")'
+                class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs cursor-pointer">
+                📋 Copy cd &amp; kubectl
+              </button>
+            </div>
+
+            <!-- Scenario & Numbered Requirements -->
+            <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-3">
+              <div class="space-y-1">
+                <div class="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-cyan-400">สถานการณ์โจทย์ (Scenario):</div>
+                <p class="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                  ${this.formatInlineMarkdown(q.scenario)}
+                </p>
+              </div>
+
+              <div class="space-y-2 pt-2 border-t border-slate-200/70 dark:border-slate-800">
+                <div class="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  โจทย์และสิ่งที่ต้องทำในคลัสเตอร์ (Requirements):
+                </div>
+                <ol class="list-decimal list-inside space-y-2 text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                  ${(q.requirements || [])
+                    .map((req) => `<li class="pl-1">${this.formatInlineMarkdown(req)}</li>`)
+                    .join("")}
+                </ol>
+              </div>
+            </div>
+
+            <!-- Collapsible Hints & Solution Commands -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <!-- Hints -->
+              <details class="group rounded-2xl bg-amber-500/5 border border-amber-500/30 p-3.5 text-xs">
+                <summary class="font-black text-amber-600 dark:text-amber-400 cursor-pointer flex items-center justify-between">
+                  <span>💡 คำใบ้และเทคนิคช่วยทำข้อสอบ (Hints)</span>
+                  <span class="text-[10px] group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <ul class="mt-2.5 space-y-1.5 list-disc list-inside text-slate-700 dark:text-slate-300 leading-relaxed">
+                  ${(q.hints || []).map((h) => `<li>${this.formatInlineMarkdown(h)}</li>`).join("")}
+                </ul>
+              </details>
+
+              <!-- Solution Commands -->
+              <details class="group rounded-2xl bg-emerald-500/5 border border-emerald-500/30 p-3.5 text-xs">
+                <summary class="font-black text-emerald-600 dark:text-emerald-400 cursor-pointer flex items-center justify-between">
+                  <span>🔑 เฉลยคำสั่ง (Solution Commands)</span>
+                  <span class="text-[10px] group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div class="mt-2.5 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[11px] text-slate-400">สามารถคัดลอกไปรันใน Terminal เพื่อทดสอบระบบตรวจได้ทันที:</span>
+                    <button onclick='window.app.copyText(${JSON.stringify(q.solutionCommands || "")}, "คัดลอกคำสั่งเฉลยเรียบร้อยแล้ว!")'
+                      class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] cursor-pointer">
+                      📋 Copy Commands
+                    </button>
+                  </div>
+                  <pre class="p-3 rounded-xl bg-slate-950 text-emerald-300 font-mono text-[11px] overflow-x-auto leading-relaxed">${this.escapeHtml(q.solutionCommands || "")}</pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <!-- STEP 2 CARD: Open Real Terminal & Run Commands -->
+          <div class="p-4 sm:p-5 rounded-2xl border border-dashed border-blue-500/40 bg-blue-500/5 space-y-2.5">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="text-xs sm:text-sm font-black text-blue-600 dark:text-cyan-400 flex items-center gap-2">
+                <span>💻 ขั้นที่ 2: เปิดโปรแกรม Terminal บนเครื่องคุณแล้วรันคำสั่ง</span>
+              </div>
+              <button onclick='window.app.copyText(${JSON.stringify(quickCommands)}, "คัดลอกคำสั่ง Quick-Start แล้ว!")'
+                class="px-2.5 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-600 dark:text-cyan-300 font-bold text-xs cursor-pointer">
+                📋 Copy Quick-Start
+              </button>
+            </div>
+            <p class="text-xs text-slate-600 dark:text-slate-300">
+              สลับไปที่โปรแกรม Linux Terminal (<code class="font-mono">bash</code> / <code class="font-mono">zsh</code>, <code class="font-mono">kubectl</code>, <code class="font-mono">vim</code>) บนเครื่องของคุณ ทุกคำสั่ง <code class="font-mono">kubectl</code> ที่คุณรันจะอัปเดตสถานะคลัสเตอร์จำลองใน <code class="font-mono">~/ckad-workspace/</code> ทันที:
+            </p>
+            <pre class="p-3 rounded-xl bg-slate-950 text-emerald-300 font-mono text-xs overflow-x-auto leading-relaxed">$ cd ~/ckad-workspace/${this.escapeHtml(wsDir)}
+$ kubectl get all -n ${this.escapeHtml(q.namespace)}</pre>
+          </div>
+
+          <!-- STEP 3 CARD: Verify Answer in Local Cluster & Per-Checkpoint Grading Report -->
+          <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="space-y-0.5">
+                <div class="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                  ✅ ขั้นที่ 3: ตรวจคำตอบในคลัสเตอร์จริง (AI Auto-Grader)
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  ระบบจะตรวจสอบทั้งสถานะ Resource ในคลัสเตอร์และไฟล์ผลลัพธ์ใน <code class="font-mono">~/ckad-workspace/${this.escapeHtml(wsDir)}</code> แบบแยกเป็นราย Checkpoint
+                </p>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button onclick="window.app.verifyCkadLabAnswer()"
+                  class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-600/25 transition-all cursor-pointer">
+                  ✅ 3. กดให้ AI ตรวจคำตอบใน Local Env
+                </button>
+                ${!this.ckadBackendOnline ? `
+                  <button onclick="window.app.verifyCkadLabAnswer('pass')"
+                    class="px-3 py-2 rounded-xl bg-blue-600/20 text-blue-500 text-xs font-bold cursor-pointer">
+                    จำลองตรวจผ่าน
+                  </button>
+                ` : ""}
+              </div>
+            </div>
+
+            <!-- Per-Checkpoint Grading Report -->
+            ${gradeResult ? `
+              <div class="p-4 sm:p-5 rounded-2xl border ${
+                gradeResult.passedAll
+                  ? "border-emerald-500/50 bg-emerald-500/10"
+                  : "border-rose-500/50 bg-rose-500/10"
+              } space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div class="font-black text-sm sm:text-base ${
+                    gradeResult.passedAll ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                  }">
+                    ${
+                      gradeResult.passedAll
+                        ? `🎉 ผ่านครบทุกเกณฑ์! (+${gradeResult.earnedScore}% / ${gradeResult.maxScore}% คะแนน)`
+                        : `⚠️ ผลการตรวจ: ได้ ${gradeResult.earnedScore}% / ${gradeResult.maxScore}% คะแนน (ผ่าน ${gradeResult.passedCount}/${gradeResult.totalChecks} Checkpoints)`
+                    }
+                  </div>
+                  <div class="text-xs font-mono text-slate-600 dark:text-slate-300">
+                    ⏱️ เวลาที่ใช้: <strong>${this.formatCkadTime(gradeResult.timeSpentSeconds || 0)}</strong> (เป้า ≤ 0${q.targetMinutes || 6}:00) • บันทึกเข้าสถิติแล้ว ✓
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  ${(gradeResult.results || [])
+                    .map(
+                      (chk, cIdx) => `
+                        <div class="p-3 rounded-xl bg-white/80 dark:bg-slate-900/90 border ${
+                          chk.passed ? "border-emerald-500/30" : "border-rose-500/40"
+                        } text-xs space-y-1">
+                          <div class="flex items-center justify-between gap-2 font-bold">
+                            <span class="${chk.passed ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}">
+                              ${chk.passed ? "✅ ผ่าน (PASS)" : "❌ ไม่ผ่าน (FAIL)"} — Checkpoint ${cIdx + 1}: ${this.escapeHtml(chk.title)}
+                            </span>
+                          </div>
+                          ${
+                            !chk.passed && chk.failHint
+                              ? `<div class="text-amber-600 dark:text-amber-400 font-semibold pt-0.5">
+                                  💡 AI แนะนำจุดที่ต้องแก้: ${this.formatInlineMarkdown(chk.failHint)}
+                                </div>`
+                              : `<div class="text-slate-500 dark:text-slate-400">${this.escapeHtml(chk.detail || "ตรวจสอบถูกต้องครบถ้วน")}</div>`
+                          }
+                        </div>
+                      `
+                    )
+                    .join("")}
+                </div>
+              </div>
+            ` : ""}
+
+            <!-- Bottom Navigation Buttons -->
+            <div class="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+              <button onclick="window.app.prevCkadQuestion()"
+                ${this.ckadQuestionIndex === 0 ? "disabled" : ""}
+                class="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-40 cursor-pointer">
+                ← ข้อก่อนหน้า
+              </button>
+
+              <div class="flex items-center gap-2">
+                <button onclick="window.app.switchCkadTab('analytics')"
+                  class="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
+                  📊 ดูสถิติรวม
+                </button>
+                <button onclick="window.app.nextCkadQuestion()"
+                  ${this.ckadQuestionIndex >= questions.length - 1 ? "disabled" : ""}
+                  class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold disabled:opacity-40 cursor-pointer">
+                  ➡️ ไปข้อถัดไป (Next Question)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  renderCkadSetsAndTopicsTab() {
+    const catalog = window.CKAD_LABS_DATA || { domains: [], blueprints: [], initialSets: [] };
+    const allSets = [...(this.ckadCustomSets || []), ...(catalog.initialSets || [])];
+    const attempts = this.ckadAnalytics?.attempts || [];
+
+    // Count unresolved mistakes
+    const unresolvedIds = new Set();
+    Object.values(this.ckadAnalytics?.mistakes || {}).forEach((m) => {
+      if (m && !m.resolved && m.questionId) unresolvedIds.add(m.questionId);
+    });
+    attempts.forEach((a) => {
+      if (a && !a.passedAll && a.questionId) unresolvedIds.add(a.questionId);
+    });
+
+    return `
+      <div class="space-y-6">
+        <!-- Section A: Exam Sets & Dynamic Generator -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                📋 Section A: ชุดข้อสอบมาตรฐาน &amp; ชุดที่สร้างใหม่ (Exam Sets)
+              </h2>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                เลือกชุดข้อสอบมาตรฐาน หรือกดสุ่มสร้างข้อสอบชุดใหม่ที่เปลี่ยนชื่อ Namespace, พอด, พอร์ต และเงื่อนไขใหม่ทั้งหมดได้ไม่จำกัด
+              </p>
+            </div>
+            <button onclick="window.app.generateNewRandomExamSet(16)"
+              class="px-4 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-lg shadow-blue-600/25 transition-all cursor-pointer shrink-0">
+              ➕ คลิกสร้างข้อสอบชุดใหม่ (สุ่มโจทย์และพารามิเตอร์ใหม่ทั้งหมด)
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            ${allSets
+              .map((setDef) => {
+                const setAttempts = attempts.filter((a) => a.setId === setDef.id);
+                const passedCount = setAttempts.filter((a) => a.passedAll).length;
+                const qCount = (setDef.questionIds || []).length;
+                const isActive = this.ckadActiveSet && this.ckadActiveSet.id === setDef.id;
+
+                return `
+                  <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border ${
+                    isActive ? "border-blue-500 ring-1 ring-blue-500/40" : "border-slate-200 dark:border-slate-800"
+                  } flex flex-col justify-between space-y-4">
+                    <div class="space-y-2">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-cyan-400 font-black text-xs">
+                          ${this.escapeHtml(setDef.badge)}
+                        </span>
+                        <span class="text-xs font-bold ${
+                          setAttempts.length ? "text-emerald-500" : "text-slate-400"
+                        }">
+                          ${setAttempts.length ? `ตรวจแล้ว ${passedCount}/${setAttempts.length} ครั้ง` : "พร้อมเริ่มทำ"}
+                        </span>
+                      </div>
+                      <h3 class="font-black text-sm sm:text-base text-slate-900 dark:text-white">
+                        ${this.escapeHtml(setDef.title)}
+                      </h3>
+                      <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        ${this.escapeHtml(setDef.description)}
+                      </p>
+                      <div class="text-[11px] font-mono text-slate-400">
+                        📌 จำนวน ${qCount} ข้อ • ⏱️ เวลา ${setDef.durationMinutes || qCount * 6} นาที
+                      </div>
+                    </div>
+
+                    <div class="pt-2 flex flex-col gap-2">
+                      <button onclick="window.app.startCkadExamSet('${setDef.id}', false)"
+                        class="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow transition-all cursor-pointer">
+                        🚀 เริ่มทำชุดนี้
+                      </button>
+                      <button onclick="window.app.startCkadExamSet('${setDef.id}', true)"
+                        class="w-full py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all cursor-pointer">
+                        🎲 สุ่มค่าโจทย์ในชุดนี้ใหม่
+                      </button>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
+
+        <!-- Section B: Topic / Domain Focus Mode -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5 shadow-sm">
+          <div>
+            <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+              🎯 Section B: เลือกฝึกเฉพาะหัวข้อ (Topic / Domain Focus Mode)
+            </h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              เลือกฝึกเจาะจงเฉพาะหมวดจาก 5 หมวดหลักของ CNCF CKAD หรือคลิกที่ข้อสอบรายข้อเพื่อกระโดดไปฝึกทันที
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${(catalog.domains || [])
+              .map((dom) => {
+                const domQuestions = (catalog.blueprints || []).filter((b) => b.domainId === dom.id);
+                const dStat = (this.ckadAnalytics?.domainStats || {})[dom.id] || {
+                  attempts: 0,
+                  totalEarned: 0,
+                  totalMax: 0
+                };
+                const accPct = dStat.totalMax > 0 ? Math.round((dStat.totalEarned / dStat.totalMax) * 100) : null;
+
+                return `
+                  <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3.5">
+                    <div class="space-y-2">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-black text-xs">
+                          Domain ${dom.number} (${dom.weight}% Weight)
+                        </span>
+                        <span class="text-xs font-bold ${
+                          accPct === null ? "text-slate-400" : accPct >= 66 ? "text-emerald-500" : "text-rose-500"
+                        }">
+                          ${accPct === null ? "ยังไม่เคยตรวจ" : `ความแม่นยำ ${accPct}%`}
+                        </span>
+                      </div>
+                      <h3 class="font-black text-sm sm:text-base text-slate-900 dark:text-white">
+                        ${this.escapeHtml(dom.title)} — ${this.escapeHtml(dom.titleTh)}
+                      </h3>
+                      <p class="text-xs text-slate-500 dark:text-slate-400">
+                        ${this.escapeHtml(dom.topics)}
+                      </p>
+
+                      <!-- Question links in this domain -->
+                      <div class="flex flex-wrap gap-1.5 pt-1">
+                        ${domQuestions
+                          .map(
+                            (bp) => `
+                              <button onclick="window.app.openCkadLabQuestion('${bp.id}')"
+                                class="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 text-[11px] font-mono text-slate-700 dark:text-slate-300 cursor-pointer"
+                                title="${this.escapeHtml(bp.baseTitle)}">
+                                ${this.escapeHtml(bp.id)}: ${this.escapeHtml(bp.baseTitle.slice(0, 26))}
+                              </button>
+                            `
+                          )
+                          .join("")}
+                      </div>
+                    </div>
+
+                    <div class="pt-2 flex items-center gap-2">
+                      <button onclick="window.app.startCkadDomainPractice('${dom.id}', false)"
+                        class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs cursor-pointer">
+                        🎯 ฝึกเฉพาะหมวดนี้ (${domQuestions.length} ข้อ)
+                      </button>
+                      <button onclick="window.app.startCkadDomainPractice('${dom.id}', true)"
+                        class="flex-1 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs cursor-pointer">
+                        🎲 สุ่มโจทย์ใหม่ในหมวดนี้
+                      </button>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")}
+
+            <!-- Card 6: Weakness Retry Mode -->
+            <div class="p-4 sm:p-5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex flex-col justify-between space-y-3.5">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 font-black text-xs">
+                    🔥 Weakness Retry Mode
+                  </span>
+                  <span class="text-xs font-bold text-rose-500">
+                    ${unresolvedIds.size ? `พบข้อที่เคยพลาด ${unresolvedIds.size} ข้อ` : "โหมดรวมโจทย์ปราบเซียน"}
+                  </span>
+                </div>
+                <h3 class="font-black text-sm sm:text-base text-rose-600 dark:text-rose-400">
+                  🔥 โหมดซ้อมเฉพาะข้อที่เคยทำผิด (Weakness Retry Mode)
+                </h3>
+                <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  ดึงเฉพาะหัวข้อและโจทย์ที่คุณเคยทำผิดในคลัสเตอร์ (เช่นลืมใส่ <code class="font-mono">policyTypes</code>, ใส่ <code class="font-mono">securityContext</code> ผิดระดับ หรือลืมบันทึกไฟล์) มาสุ่มพารามิเตอร์ใหม่ให้ซ้อมจนชำนาญ
+                </p>
+              </div>
+              <button onclick="window.app.startCkadWeaknessPractice()"
+                class="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow cursor-pointer">
+                🔥 เริ่มซ้อมเฉพาะข้อที่เคยทำผิดทันที
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  renderCkadAnalyticsTab() {
+    const catalog = window.CKAD_LABS_DATA || { domains: [], blueprints: [] };
+    const analytics = this.ckadAnalytics || this.createDefaultCkadAnalytics();
+    const attempts = analytics.attempts || [];
+
+    // Calculate KPIs
+    let totalEarned = 0;
+    let totalMax = 0;
+    let totalSeconds = 0;
+    let passedAttempts = 0;
+
+    attempts.forEach((a) => {
+      totalEarned += Number(a.earnedScore) || 0;
+      totalMax += Number(a.maxScore) || 0;
+      totalSeconds += Number(a.timeSpentSeconds) || 0;
+      if (a.passedAll) passedAttempts += 1;
+    });
+
+    const overallAccuracy = totalMax > 0 ? Math.round((totalEarned / totalMax) * 100) : 0;
+    const avgTimeSeconds = attempts.length > 0 ? Math.round(totalSeconds / attempts.length) : 0;
+
+    // Identify weakest domain
+    let weakestDomainLabel = "ยังไม่มีประวัติข้อที่ผิด";
+    let lowestPct = 101;
+    (catalog.domains || []).forEach((dom) => {
+      const st = (analytics.domainStats || {})[dom.id];
+      if (st && st.totalMax > 0) {
+        const pct = Math.round((st.totalEarned / st.totalMax) * 100);
+        if (pct < lowestPct) {
+          lowestPct = pct;
+          weakestDomainLabel = `Domain ${dom.number}: ${dom.title} (${pct}%)`;
+        }
+      }
+    });
+
+    return `
+      <div class="space-y-6">
+        <!-- 4 Summary KPI Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 space-y-1 shadow-sm">
+            <div class="text-xs text-slate-400 font-bold">คะแนนเฉลี่ยล่าสุด (เกณฑ์ผ่าน 66%)</div>
+            <div class="text-xl sm:text-2xl font-black ${
+              attempts.length === 0 ? "text-slate-400" : overallAccuracy >= 66 ? "text-emerald-500" : "text-rose-500"
+            }">
+              ${attempts.length === 0 ? "— (0%)" : `${overallAccuracy}% (${overallAccuracy >= 66 ? "PASS" : "NEEDS PRACTICE"})`}
+            </div>
+            <div class="text-[11px] text-slate-400">เกณฑ์สอบผ่าน CNCF CKAD คือ 66%</div>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 space-y-1 shadow-sm">
+            <div class="text-xs text-slate-400 font-bold">เวลาเฉลี่ยที่ใช้ต่อข้อ</div>
+            <div class="text-xl sm:text-2xl font-black text-blue-600 dark:text-cyan-400 font-mono">
+              ${this.formatCkadTime(avgTimeSeconds)} นาที
+            </div>
+            <div class="text-[11px] text-slate-400">เป้าหมายแนะนำ ≤ 06:00 นาที/ข้อ</div>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 space-y-1 shadow-sm">
+            <div class="text-xs text-slate-400 font-bold">จำนวนครั้งที่ตรวจข้อสอบทั้งหมด</div>
+            <div class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              ${passedAttempts} / ${attempts.length} ครั้งที่ผ่าน
+            </div>
+            <div class="text-[11px] text-slate-400">บันทึกจาก Local Env อัตโนมัติ</div>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 space-y-1 shadow-sm">
+            <div class="text-xs text-slate-400 font-bold">หมวดที่ควรเน้นเป็นพิเศษ</div>
+            <div class="text-xs sm:text-sm font-black text-amber-500 truncate" title="${this.escapeHtml(weakestDomainLabel)}">
+              ${this.escapeHtml(weakestDomainLabel)}
+            </div>
+            <div class="text-[11px] text-slate-400">วิเคราะห์จากคะแนนรายหมวด</div>
+          </div>
+        </div>
+
+        <!-- 5-Domain Readiness Progress Bars -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+              📊 ความพร้อมแยกตามหมวดข้อสอบจริง (5-Domain Readiness)
+            </h3>
+            <button onclick="window.app.resetCkadAnalytics()"
+              class="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 text-xs font-bold cursor-pointer">
+              🗑️ ล้างสถิติทั้งหมด (Reset Analytics)
+            </button>
+          </div>
+
+          <div class="space-y-3.5 text-xs">
+            ${(catalog.domains || [])
+              .map((dom) => {
+                const st = (analytics.domainStats || {})[dom.id] || {
+                  attempts: 0,
+                  passed: 0,
+                  totalEarned: 0,
+                  totalMax: 0
+                };
+                const domAttempts = attempts.filter((a) => a.domainId === dom.id);
+                const domAvgSec = domAttempts.length
+                  ? Math.round(
+                      domAttempts.reduce((acc, x) => acc + (Number(x.timeSpentSeconds) || 0), 0) / domAttempts.length
+                    )
+                  : 0;
+                const pct = st.totalMax > 0 ? Math.round((st.totalEarned / st.totalMax) * 100) : 0;
+                const barColor =
+                  st.totalMax === 0
+                    ? "bg-slate-400"
+                    : pct >= 70
+                    ? "bg-emerald-500"
+                    : pct >= 50
+                    ? "bg-amber-500"
+                    : "bg-rose-500";
+
+                return `
+                  <div class="space-y-1.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 font-bold">
+                      <span class="text-slate-800 dark:text-slate-200">
+                        ${dom.number}. ${this.escapeHtml(dom.title)} (${dom.weight}%) — ${this.escapeHtml(dom.titleTh)}
+                      </span>
+                      <div class="flex items-center gap-3">
+                        <span class="${pct >= 66 ? "text-emerald-500" : st.totalMax > 0 ? "text-amber-500" : "text-slate-400"}">
+                          ความแม่นยำ ${pct}% (${st.passed}/${st.attempts} ข้อ) • เวลาเฉลี่ย ${this.formatCkadTime(domAvgSec)} นาที/ข้อ
+                        </span>
+                        <button onclick="window.app.startCkadDomainPractice('${dom.id}', true)"
+                          class="px-2.5 py-1 rounded-lg bg-blue-600/15 text-blue-600 dark:text-cyan-400 font-bold cursor-pointer">
+                          ฝึกหมวดนี้
+                        </button>
+                      </div>
+                    </div>
+                    <div class="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div class="${barColor} h-2.5 rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
+
+        <!-- Mistake & Time Analysis Log Table -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm">
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+              ❌ ตารางวิเคราะห์ข้อที่ทำผิด &amp; เวลาที่ใช้รายข้อ (Mistake &amp; Time Analysis Log)
+            </h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              บันทึกประวัติการกดตรวจคำตอบทุกครั้ง พร้อมระบุ Checkpoint ที่ผิดและคำแนะนำจาก AI เพื่อให้คุณกดซ้อมข้อเดิมหรือสุ่มโจทย์คล้ายเดิมได้ทันที
+            </p>
+          </div>
+
+          ${
+            attempts.length === 0
+              ? `
+                <div class="p-8 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-2">
+                  <div class="text-sm font-bold text-slate-600 dark:text-slate-300">ยังไม่มีประวัติการตรวจข้อสอบ</div>
+                  <p class="text-xs text-slate-400">ไปที่แท็บ "🖥️ 1. หน้าโจทย์สอบจริง" แล้วกดตรวจคำตอบเพื่อเริ่มเก็บสถิติเวลาและจุดที่ผิด</p>
+                </div>
+              `
+              : `
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="border-b border-slate-200 dark:border-slate-800 text-slate-400 font-bold">
+                        <th class="py-3 px-3">ข้อที่ / หัวข้อโจทย์</th>
+                        <th class="py-3 px-3">หมวด (Domain)</th>
+                        <th class="py-3 px-3">คะแนนที่ได้</th>
+                        <th class="py-3 px-3">เวลาที่ใช้</th>
+                        <th class="py-3 px-3">วิเคราะห์จุดที่ผิด / ผลการตรวจใน Local Env</th>
+                        <th class="py-3 px-3">การจัดการ (ซ้อมซ้ำ / สุ่มใหม่)</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                      ${attempts
+                        .slice(0, 30)
+                        .map((att) => {
+                          const bp = (catalog.blueprints || []).find((b) => b.id === att.questionId);
+                          const targetSec = ((bp && bp.targetMinutes) || 6) * 60;
+                          const isOverTime = (Number(att.timeSpentSeconds) || 0) > targetSec;
+                          const failedList = att.failedChecks || [];
+
+                          return `
+                            <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                              <td class="py-3.5 px-3 font-bold text-slate-900 dark:text-white">
+                                <div>${this.escapeHtml((att.questionId || "").toUpperCase())}: ${this.escapeHtml(att.title)}</div>
+                                <div class="text-[10px] font-mono text-slate-400">Seed #${att.seed || 100}</div>
+                              </td>
+                              <td class="py-3.5 px-3 text-slate-500 dark:text-slate-400">
+                                ${this.escapeHtml(att.domainTitle || att.domainId)}
+                              </td>
+                              <td class="py-3.5 px-3 font-black ${
+                                att.passedAll ? "text-emerald-500" : "text-rose-500"
+                              }">
+                                ${att.passedCount}/${att.totalChecks} (${att.earnedScore}/${att.maxScore}%)
+                              </td>
+                              <td class="py-3.5 px-3 font-mono ${
+                                isOverTime ? "text-amber-500 font-bold" : "text-slate-600 dark:text-slate-300"
+                              }">
+                                ${this.formatCkadTime(att.timeSpentSeconds)} นาที
+                                ${isOverTime ? `<span class="block text-[10px] text-amber-500">⚠️ เกินเวลาเป้า</span>` : ""}
+                              </td>
+                              <td class="py-3.5 px-3 max-w-md">
+                                ${
+                                  att.passedAll
+                                    ? `<span class="text-emerald-500 font-semibold">✅ ผ่านครบทุก Checkpoint</span>`
+                                    : failedList
+                                        .map(
+                                          (fc) => `
+                                            <div class="mb-1 text-rose-500">
+                                              <strong>❌ ${this.escapeHtml(fc.title)}:</strong>
+                                              <span class="text-slate-600 dark:text-slate-300">${this.formatInlineMarkdown(fc.failHint || "")}</span>
+                                            </div>
+                                          `
+                                        )
+                                        .join("")
+                                }
+                              </td>
+                              <td class="py-3.5 px-3">
+                                <div class="flex flex-col sm:flex-row gap-1.5">
+                                  <button onclick="window.app.retryCkadQuestion('${att.questionId}', ${Number(att.seed) || 100})"
+                                    class="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold whitespace-nowrap cursor-pointer">
+                                    🔁 ซ้อมข้อนี้ซ้ำ (Retry Exact)
+                                  </button>
+                                  <button onclick="window.app.retryCkadQuestion('${att.questionId}', null)"
+                                    class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold whitespace-nowrap cursor-pointer">
+                                    🎲 สุ่มโจทย์คล้ายข้อนี้ (New Variant)
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          `;
+                        })
+                        .join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `
+          }
+        </div>
+      </div>
+    `;
   }
 
   // ===========================================================================

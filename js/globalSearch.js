@@ -104,6 +104,23 @@ class GlobalSearchModal {
       });
     });
 
+    // 5. CKAD Hands-On Exam Labs Blueprints
+    const ckadCatalog = window.CKAD_LABS_DATA || { blueprints: [] };
+    (ckadCatalog.blueprints || []).forEach((bp) => {
+      const sample = typeof bp.build === "function" ? bp.build(100) : {};
+      items.push({
+        type: "CKAD Lab",
+        badge: `${bp.id.toUpperCase()} (${bp.weight}%)`,
+        icon: "🧪",
+        title: `${bp.id.toUpperCase()}: ${sample.title || bp.baseTitle}`,
+        subtitle: `${bp.domainTitle} • Real Terminal Hands-On Lab`,
+        keywords: `ckad lab ${bp.id} ${bp.baseTitle} ${sample.title || ""} ${bp.domainTitle} ${sample.scenario || ""}`.toLowerCase(),
+        action: () => {
+          window.app.openCkadLabQuestion(bp.id);
+        }
+      });
+    });
+
     this.index = items;
   }
 

@@ -90,11 +90,15 @@
         </a>
       </div>
 
-      <!-- Center: Quick Nav Link to Lessons Hub -->
+      <!-- Center: Quick Nav Link to Lessons Hub & CKAD Exam Labs -->
       <div class="hidden md:flex items-center gap-2">
         <button onclick="window.app.navigateTo('lessons')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-cyan-400 border border-blue-200 dark:border-blue-900/50 hover:bg-blue-100 transition-all flex items-center gap-1.5">
           <span>📚</span>
           <span>Lessons Hub</span>
+        </button>
+        <button onclick="window.app.navigateTo('ckad-labs')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/50 hover:bg-indigo-100 transition-all flex items-center gap-1.5">
+          <span>🧪</span>
+          <span>CKAD Exam Labs</span>
         </button>
       </div>
 
@@ -179,6 +183,12 @@
           </div>
         </div>
 
+        <!-- 2.3. CKAD Hands-On Exam Labs -->
+        <button data-nav-target="ckad-labs" class="w-full flex items-center justify-center lg:justify-start gap-3 px-3 lg:px-4 py-3 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left group" title="CKAD Exam Labs (Real Terminal + AI Auto-Grader)">
+          <span class="text-lg shrink-0">🧪</span>
+          <span class="hidden lg:inline truncate">CKAD Exam Labs</span>
+        </button>
+
         <!-- 3. Imperative CLI Playground -->
         <button data-nav-target="cli-playground" class="w-full flex items-center justify-center lg:justify-start gap-3 px-3 lg:px-4 py-3 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left group" title="CLI Speed Playground">
           <span class="text-lg shrink-0">⌨️</span>
@@ -218,6 +228,10 @@
     <button data-bottom-nav="tasks" onclick="window.app.navigateTo('tasks')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-slate-500 dark:text-slate-400 font-medium active:scale-95">
       <span class="text-base leading-none">🛠️</span>
       <span class="text-[10px] tracking-tight mt-1 truncate">Tasks</span>
+    </button>
+    <button data-bottom-nav="ckad-labs" onclick="window.app.navigateTo('ckad-labs')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-slate-500 dark:text-slate-400 font-medium active:scale-95">
+      <span class="text-base leading-none">🧪</span>
+      <span class="text-[10px] tracking-tight mt-1 truncate">CKAD Labs</span>
     </button>
     <button data-bottom-nav="cli-playground" onclick="window.app.navigateTo('cli-playground')" class="flex-1 min-w-0 flex flex-col items-center justify-center py-1 rounded-xl transition-all text-slate-500 dark:text-slate-400 font-medium active:scale-95">
       <span class="text-lg leading-none">⌨️</span>
@@ -270,6 +284,9 @@
             </button>
             <div id="mobile-tasks-dropdown" class="hidden pl-3 space-y-1"></div>
           </div>
+          <button data-nav-target="ckad-labs" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left">
+            <span>🧪 CKAD Exam Labs</span>
+          </button>
           <button data-nav-target="cli-playground" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left">
             <span>⌨️ CLI Speed Playground</span>
           </button>
@@ -449,15 +466,16 @@
   <script src="docs/tasks/tools-shell-autocompletion.js"></script>
   <script src="docs/tasks/index.js"></script>
 
-  <!-- CLI Playground Dataset -->
+  <!-- CLI Playground & CKAD Exam Labs Datasets -->
   <script src="data/cliDrillsData.js"></script>
+  <script src="data/ckadLabsData.js?v=8"></script>
 
   <!-- Core Engines -->
-  <script src="js/audio.js?v=7"></script>
-  <script src="js/storage.js?v=7"></script>
-  <script src="js/kubectlEngine.js?v=7"></script>
-  <script src="js/globalSearch.js?v=7"></script>
-  <script src="js/pwa.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="js/audio.js?v=8"></script>
+  <script src="js/storage.js?v=8"></script>
+  <script src="js/kubectlEngine.js?v=8"></script>
+  <script src="js/globalSearch.js?v=8"></script>
+  <script src="js/pwa.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>

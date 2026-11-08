@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# KubeMastery - Start Local Web Server
+# KubeMastery - Start Local Web & CKAD Lab Server
 # Usage: ./start.sh [PORT] (default: 3080)
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,6 +10,8 @@ PORT="${1:-3080}"
 PID_FILE="$DIR/.server.pid"
 PORT_FILE="$DIR/.server.port"
 LOG_FILE="$DIR/server.log"
+
+NODE_BIN="$(command -v node 2>/dev/null || echo "/home/nopakun-sangon/.local/node-v20.18.0-linux-x64/bin/node")"
 
 # Check if port is already in use by any process
 RUNNING_PID=$(lsof -ti :"$PORT" 2>/dev/null | head -n 1)
@@ -26,12 +28,12 @@ fi
 # Clean stale PID file if present
 rm -f "$PID_FILE" "$PORT_FILE"
 
-echo "🚀 Starting KubeMastery web server on port $PORT..."
+echo "🚀 Starting KubeMastery web & CKAD lab server on port $PORT..."
 
 if command -v setsid >/dev/null 2>&1; then
-    setsid -f python3 -m http.server "$PORT" > "$LOG_FILE" 2>&1
+    setsid -f "$NODE_BIN" "$DIR/server.js" "$PORT" > "$LOG_FILE" 2>&1
 else
-    nohup python3 -m http.server "$PORT" < /dev/null > "$LOG_FILE" 2>&1 & disown
+    nohup "$NODE_BIN" "$DIR/server.js" "$PORT" < /dev/null > "$LOG_FILE" 2>&1 & disown
 fi
 
 # Give server time to bind port
@@ -44,9 +46,10 @@ if [ -n "$SERVER_PID" ]; then
     echo "$PORT" > "$PORT_FILE"
     echo "✅ KubeMastery server started successfully!"
     echo "----------------------------------------"
-    echo "🌐 Local URL : http://localhost:$PORT"
-    echo "🆔 PID       : $SERVER_PID"
-    echo "📄 Log file  : $LOG_FILE"
+    echo "🌐 Local URL      : http://localhost:$PORT"
+    echo "🔧 CKAD Workspace : ~/ckad-workspace"
+    echo "🆔 PID            : $SERVER_PID"
+    echo "📄 Log file       : $LOG_FILE"
     echo "----------------------------------------"
     echo "💡 Run './stop.sh' to stop the server."
 else
@@ -57,4 +60,3 @@ else
     fi
     exit 1
 fi
-
