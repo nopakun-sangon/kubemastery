@@ -1,0 +1,22 @@
+# Lightweight Single-Node Kind Cluster Config for CKAD Practice (~400 MB RAM)
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ckad-light
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true,tier=ckad"
+  extraPortMappings:
+  - containerPort: 30080
+    hostPort: 30080
+    protocol: TCP
+  - containerPort: 30180
+    hostPort: 30180
+    protocol: TCP
+  - containerPort: 80
+    hostPort: 8088
+    protocol: TCP

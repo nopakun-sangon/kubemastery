@@ -1289,8 +1289,34 @@ function findTargetResource(state, kindArg, nameArg, nsArg) {
   return { info, name: n, ns, idx, resource: idx >= 0 ? state.resources[idx] : null, extraPositional };
 }
 
+function getKubectlMode() {
+  if (process.env.CKAD_KUBECTL_MODE) {
+    return String(process.env.CKAD_KUBECTL_MODE).trim().toLowerCase();
+  }
+  try {
+    const modeFile = path.join(WORKSPACE_ROOT, ".kubectl-mode");
+    if (fs.existsSync(modeFile)) {
+      return fs.readFileSync(modeFile, "utf8").trim().toLowerCase();
+    }
+  } catch (_) {}
+  return "sim";
+}
+
 function main() {
   const rawArgv = process.argv.slice(2);
+
+  // If user switched to real Kind cluster mode, pass through transparently to /snap/bin/kubectl
+  const activeMode = getKubectlMode();
+  if (activeMode === "kind" || activeMode === "real") {
+    const realBin = fs.existsSync("/snap/bin/kubectl")
+      ? "/snap/bin/kubectl"
+      : "/usr/local/bin/kubectl";
+    if (fs.existsSync(realBin)) {
+      const res = spawnSync(realBin, rawArgv, { stdio: "inherit" });
+      process.exit(res.status === null ? 1 : res.status);
+    }
+  }
+
   if (rawArgv.length === 0 || rawArgv[0] === "--help" || rawArgv[0] === "-h" || rawArgv[0] === "help") {
     console.log("kubectl controls the KubeMastery CKAD Kubernetes cluster manager.");
     process.exit(0);

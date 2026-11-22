@@ -12,6 +12,12 @@
       badge: "All"
     },
     {
+      id: "light-k8s-setup",
+      title: "0. ติดตั้ง K8s แบบเบาสำหรับสอบ CKAD (Kind / Helm / Docker)",
+      icon: "🪶",
+      badge: "Lightweight K8s"
+    },
+    {
       id: "exam-setup",
       title: "1. ตั้งค่าก่อนสอบ & ทางลัดความเร็ว (Alias / Vim / Context)",
       icon: "⚡",
@@ -74,6 +80,101 @@
   ];
 
   const CLI_TIPS_ITEMS = [
+    // =========================================================================
+    // 0. LIGHTWEIGHT KUBERNETES SETUP (KIND, HELM, DOCKER BUILD FOR CKAD)
+    // =========================================================================
+    {
+      id: "tip-light-kind-switcher",
+      categoryId: "light-k8s-setup",
+      categoryTitle: "ติดตั้ง K8s แบบเบาสำหรับสอบ CKAD (Kind / Helm / Docker)",
+      title: "สลับโหมดคลัสเตอร์แบบเบา: Simulator (RAM 0 MB) ↔ Kind Cluster จริง (~400 MB)",
+      examTag: "Lightweight CKAD Lab",
+      importance: "CRITICAL",
+      command: `./scripts/ckad-light-setup.sh status
+./scripts/ckad-light-setup.sh setup-shell
+./scripts/ckad-light-setup.sh mode-kind
+./scripts/ckad-light-setup.sh stop-kind`,
+      howItWorks:
+        "สำหรับเครื่อง RAM 8 GB การเปิด Minikube VM เต็มตัวจะกิน RAM 2–2.5 GB ทำให้เครื่องหน่วง เราจึงจัดเตรียมสคริปต์สลับ 2 โหมดแบบเบาที่สุดไว้ให้:\n" +
+        "• **`mode-sim` (RAM 0 MB):** ใช้ตัวจำลองของ KubeMastery โดยไม่ต้องเปิด Docker ทำงานร่วมกับหน้าเว็บ CKAD Exam Labs 100%\n" +
+        "• **`mode-kind` (RAM ~400 MB):** เปิด Docker และรันคลัสเตอร์ Kubernetes จริงแบบ Single-Node ด้วย `kind` (เบากว่า Minikube 4 เท่า) พร้อมสลับ `kubectl` ไปยังคลัสเตอร์จริงให้อัตโนมัติ\n" +
+        "• **`stop-kind`:** หยุดพัก Container ของ Kind เพื่อคืน RAM ~400–500 MB กลับให้เครื่องทันทีโดยที่ข้อมูลในคลัสเตอร์ไม่หาย!",
+      flags: [
+        { flag: "status", desc: "ตรวจสอบ RAM ว่าง, สถานะ Docker, Kind, Helm, Vim และโหมด kubectl ปัจจุบัน" },
+        { flag: "setup-shell", desc: "ตั้งค่า ~/.vimrc (2-space YAML) และ ~/.bashrc (alias k, $do, $now, bash completion)" },
+        { flag: "mode-kind", desc: "เปิด Docker + สร้างหรือสตาร์ทคลัสเตอร์ Kind 'ckad-light' และสลับไปใช้ real kubectl" },
+        { flag: "stop-kind", desc: "หยุดคลัสเตอร์ Kind คืน RAM และสลับกลับสู่โหมด Simulator (0 MB RAM)" }
+      ],
+      exampleCode: `# 1. ตรวจสอบเครื่องมือที่มีในเครื่องและ RAM ว่าง
+./scripts/ckad-light-setup.sh status
+
+# 2. เปิดคลัสเตอร์ Kind จริงแบบเบาเมื่อต้องการทดสอบรัน Container / exec / helm
+./scripts/ckad-light-setup.sh mode-kind
+kubectl get nodes -o wide
+
+# 3. เลิกซ้อมแล้วหยุดคลัสเตอร์คืน RAM ทันที
+./scripts/ckad-light-setup.sh stop-kind`,
+      examTip: "แนะนำให้เปิด `mode-kind` เฉพาะตอนที่ต้องการลอง `kubectl exec`, `helm install` หรือรันคอนเทนเนอร์จริง และสั่ง `stop-kind` ทุกครั้งหลังซ้อมเสร็จ เครื่องจะลื่นตลอดเวลา!"
+    },
+    {
+      id: "tip-helm-ckad-commands",
+      categoryId: "light-k8s-setup",
+      categoryTitle: "ติดตั้ง K8s แบบเบาสำหรับสอบ CKAD (Kind / Helm / Docker)",
+      title: "คำสั่ง Helm ที่ออกสอบ CKAD บ่อยที่สุด (Install, Upgrade, Rollback, Uninstall)",
+      examTag: "CKAD Domain 2 (Helm)",
+      importance: "CRITICAL",
+      command: `helm repo list && helm repo update
+helm list -A
+helm install my-release bitnami/nginx -n prod --set replicaCount=2
+helm upgrade my-release bitnami/nginx -n prod --set image.tag=1.25
+helm rollback my-release 1 -n prod`,
+      howItWorks:
+        "ข้อสอบ CKAD หมวด Application Deployment (20%) มักมีโจทย์ Helm อย่างน้อย 1 ข้อ เช่น การตรวจสอบ Release ที่ติดตั้งอยู่ทั้งหมด (`helm list -A`), การค้นหา Chart, การอัปเกรดค่า `--set`, หรือการลบ Release ที่ติดสถานะ Pending/Failed",
+      flags: [
+        { flag: "helm list -A (-a)", desc: "แสดง Helm Releases ทั้งหมดในทุก Namespace (เพิ่ม -a เพื่อดูตัวที่ Failed/Pending ด้วย)" },
+        { flag: "--set key=value", desc: "ปรับแก้ค่าพารามิเตอร์ใน values.yaml แบบด่วนจาก Command Line" },
+        { flag: "-f values.yaml", desc: "ส่งไฟล์ values.yaml ที่แก้ไขเองเข้าไปตอน install หรือ upgrade" },
+        { flag: "helm rollback <release> <rev>", desc: "ย้อนเวอร์ชันของ Helm Release กลับไปยัง Revision ที่ระบุ" }
+      ],
+      exampleCode: `# ตรวจสอบดู Release ที่พัง (pending-install / failed) แล้วลบทิ้ง
+helm list -A -a
+helm uninstall broken-app -n staging
+
+# ดูประวัติ Revision ของ Release ก่อนสั่ง Rollback
+helm history my-release -n prod
+helm rollback my-release 1 -n prod`,
+      examTip: "จำ Flag `-A -a` (`helm list -A -a`) ไว้ให้แม่น! เพราะบางครั้งโจทย์ซ่อน Release ที่ติดสถานะ `pending-upgrade` หรือ `failed` ไว้ ซึ่งถ้าพิมพ์แค่ `helm list` เฉยๆ จะมองไม่เห็น!"
+    },
+    {
+      id: "tip-docker-build-save-ckad",
+      categoryId: "light-k8s-setup",
+      categoryTitle: "ติดตั้ง K8s แบบเบาสำหรับสอบ CKAD (Kind / Helm / Docker)",
+      title: "คำสั่ง Docker / Podman สำหรับโจทย์สร้างและส่งออก Container Image ใน CKAD",
+      examTag: "CKAD Domain 1 (Images)",
+      importance: "HIGH",
+      command: `docker build -t my-app:1.0 .
+docker save -o /opt/my-app.tar my-app:1.0
+kind load docker-image my-app:1.0 --name ckad-light`,
+      howItWorks:
+        "ในข้อสอบ CKAD หมวด Application Design & Build อาจมีโจทย์ให้เข้าไปในโฟลเดอร์ที่มี `Dockerfile` แล้วสั่ง Build เป็น Container Image ด้วย Tag ที่กำหนด และบันทึก Image ออกเป็นไฟล์ `.tar` (OCI/Docker archive) ลงพาธที่โจทย์ระบุ:\n" +
+        "• `docker build -t <name>:<tag> <dir>`: สร้าง Image จาก Dockerfile\n" +
+        "• `docker save -o <file.tar> <name>:<tag>`: ส่งออก Image เป็นไฟล์ tar ตามที่โจทย์ตรวจ\n" +
+        "• `kind load docker-image ...`: โหลด Image ที่เพิ่ง Build เข้าไปในคลัสเตอร์ Kind โดยไม่ต้อง Push ขึ้น Docker Hub!",
+      flags: [
+        { flag: "-t <name>:<tag>", desc: "ตั้งชื่อและเวอร์ชัน Tag ให้กับ Image ที่ Build" },
+        { flag: "-f <Dockerfile>", desc: "ระบุชื่อไฟล์ Dockerfile หากไม่ได้ใช้ชื่อมาตรฐานว่า Dockerfile" },
+        { flag: "save -o <path.tar>", desc: "ส่งออก Image เป็นไฟล์ .tar ไปเก็บไว้ยังพาธที่กำหนด" }
+      ],
+      exampleCode: `# ตัวอย่างโจทย์ CKAD: Build Image จาก /root/app แล้วส่งออกเป็นไฟล์ tar
+cd /root/app
+docker build -t registry.local/web-api:v2 .
+docker save -o /tmp/web-api-v2.tar registry.local/web-api:v2
+
+# ตรวจสอบไฟล์ tar ที่สร้างขึ้น
+ls -lh /tmp/web-api-v2.tar`,
+      examTip: "หากในห้องสอบเครื่องนั้นใช้ `podman` แทน `docker` คำสั่งจะเหมือนกัน 100% แค่เปลี่ยนคำว่า `docker` เป็น `podman` (เช่น `podman build -t ...` และ `podman save -o ... --format oci-archive`)"
+    },
+
     // =========================================================================
     // 1. EXAM SETUP, ALIAS & VIM/BASH SPEED TIPS
     // =========================================================================
@@ -609,3 +710,4 @@ kubectl patch svc public-api-svc -n prod -p '{"spec":{"selector":{"version":"v2.
     module.exports = cliTipsCatalog;
   }
 })(typeof window !== "undefined" ? window : globalThis);
+
