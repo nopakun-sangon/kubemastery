@@ -121,6 +121,22 @@ class GlobalSearchModal {
       });
     });
 
+    // 6. CLI Tips & Command Reference
+    const cliTipsCatalog = window.CLI_TIPS_DATA || { items: [] };
+    (cliTipsCatalog.items || []).forEach((tip) => {
+      items.push({
+        type: "CLI Tip",
+        badge: tip.examTag || "CLI TIP",
+        icon: "💡",
+        title: tip.title,
+        subtitle: `${tip.categoryTitle} • ${tip.command.split("\n")[0]}`,
+        keywords: `tip command ${tip.title} ${tip.categoryTitle} ${tip.command} ${tip.howItWorks} ${tip.exampleCode || ""}`.toLowerCase(),
+        action: () => {
+          window.app.openCliTip(tip.id, tip.categoryId);
+        }
+      });
+    });
+
     this.index = items;
   }
 

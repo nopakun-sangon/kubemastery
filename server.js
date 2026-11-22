@@ -15,6 +15,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const aiSynthesizer = require("./aiExamSynthesizer.js");
 
 const ROOT_DIR = __dirname;
 const PORT = Number(process.argv[2] || process.env.PORT || 3080);
@@ -23,6 +24,7 @@ const BIN_DIR = path.join(WORKSPACE_ROOT, "bin");
 const KUBECTL_BIN = path.join(BIN_DIR, "kubectl");
 const STATE_FILE = path.join(WORKSPACE_ROOT, ".cluster-state.json");
 const ANALYTICS_FILE = path.join(WORKSPACE_ROOT, "ckad-analytics.json");
+const AI_LABS_FILE = path.join(WORKSPACE_ROOT, "ai-generated-labs.json");
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -163,6 +165,49 @@ function saveAnalytics(analytics) {
   fs.writeFileSync(ANALYTICS_FILE, JSON.stringify(analytics, null, 2), "utf8");
 }
 
+function loadAiLabs() {
+  fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
+  if (!fs.existsSync(AI_LABS_FILE)) {
+    const initial = {
+      updatedAt: new Date().toISOString(),
+      questions: [],
+      sets: []
+    };
+    fs.writeFileSync(AI_LABS_FILE, JSON.stringify(initial, null, 2), "utf8");
+    return initial;
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(AI_LABS_FILE, "utf8"));
+    if (!Array.isArray(data.questions)) data.questions = [];
+    if (!Array.isArray(data.sets)) data.sets = [];
+    return data;
+  } catch (_) {
+    return {
+      updatedAt: new Date().toISOString(),
+      questions: [],
+      sets: []
+    };
+  }
+}
+
+function saveAiLabs(data) {
+  data.updatedAt = new Date().toISOString();
+  fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
+  fs.writeFileSync(AI_LABS_FILE, JSON.stringify(data, null, 2), "utf8");
+}
+
+function findSavedAiQuestion(id) {
+  if (!id) return null;
+  const store = loadAiLabs();
+  const direct = store.questions.find((q) => q.id === id);
+  if (direct) return direct;
+  for (const s of store.sets) {
+    const inSet = (s.questions || []).find((q) => q.id === id);
+    if (inSet) return inSet;
+  }
+  return null;
+}
+
 function ensureWorkspaceEnvironment() {
   fs.mkdirSync(BIN_DIR, { recursive: true });
 
@@ -205,6 +250,7 @@ echo "✅ KubeMastery CKAD Terminal Environment Active (kubectl -> ${KUBECTL_BIN
 
   loadClusterState();
   loadAnalytics();
+  loadAiLabs();
 }
 
 function setupQuestionEnvironment(question) {
@@ -306,8 +352,216 @@ function setupQuestionEnvironment(question) {
   };
 }
 
+function tokenizePathSegments(pathStr) {
+  let clean = String(pathStr || "").trim();
+  if (clean.startsWith("$")) clean = clean.slice(1);
+  if (clean.startsWith(".")) clean = clean.slice(1);
+  if (!clean) return [];
+
+  const segments = [];
+  let current = "";
+  let bracketDepth = 0;
+
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (ch === "[") {
+      bracketDepth++;
+      current += ch;
+    } else if (ch === "]") {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      current += ch;
+    } else if (ch === "." && bracketDepth === 0) {
+      if (current) segments.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current) segments.push(current);
+  return segments;
+}
+
+function resolveSegments(cur, segments, idx = 0) {
+  if (cur === undefined || cur === null) return undefined;
+  if (idx >= segments.length) return cur;
+
+  // Handle literal dotted key on plain object (e.g. ConfigMap data["vhost.conf"] accessed via "data.vhost.conf")
+  const remainingJoined = segments.slice(idx).join(".");
+  if (
+    typeof cur === "object" &&
+    !Array.isArray(cur) &&
+    remainingJoined in cur &&
+    !segments[idx].includes("[")
+  ) {
+    return cur[remainingJoined];
+  }
+
+  const seg = segments[idx];
+  const bracketIdx = seg.indexOf("[");
+  if (bracketIdx === -1) {
+    if (Array.isArray(cur)) {
+      const mapped = cur
+        .map((item) => (item && typeof item === "object" ? resolveSegments(item[seg], segments, idx + 1) : undefined))
+        .filter((v) => v !== undefined);
+      return mapped.length === 1 ? mapped[0] : mapped;
+    }
+    if (typeof cur !== "object") return undefined;
+    return resolveSegments(cur[seg], segments, idx + 1);
+  }
+
+  const propName = seg.slice(0, bracketIdx);
+  let target = propName ? (cur && typeof cur === "object" ? cur[propName] : undefined) : cur;
+  if (target === undefined || target === null) return undefined;
+
+  const bracketMatches = seg.slice(bracketIdx).match(/\[([^\]]+)\]/g) || [];
+  for (let b = 0; b < bracketMatches.length; b++) {
+    const inner = bracketMatches[b].slice(1, -1).trim();
+    const isLastBracket = b === bracketMatches.length - 1;
+
+    if (inner === "*") {
+      if (!Array.isArray(target)) return undefined;
+      const results = [];
+      for (const item of target) {
+        const sub = isLastBracket ? resolveSegments(item, segments, idx + 1) : item;
+        if (Array.isArray(sub)) {
+          results.push(...sub);
+        } else if (sub !== undefined) {
+          results.push(sub);
+        }
+      }
+      if (isLastBracket) return results;
+      target = results;
+    } else if (/^\d+$/.test(inner)) {
+      if (!Array.isArray(target)) return undefined;
+      target = target[Number(inner)];
+    } else if (inner.includes("=")) {
+      if (!Array.isArray(target)) return undefined;
+      const eqPos = inner.indexOf("=");
+      const filterKey = inner.slice(0, eqPos).trim();
+      const filterVal = inner.slice(eqPos + 1).trim().replace(/^["']|["']$/g, "");
+      target = target.find((item) => item && typeof item === "object" && String(item[filterKey]) === String(filterVal));
+    } else {
+      const key = inner.replace(/^["']|["']$/g, "");
+      target = target && typeof target === "object" ? target[key] : undefined;
+    }
+
+    if (target === undefined || target === null) return undefined;
+  }
+
+  return resolveSegments(target, segments, idx + 1);
+}
+
+function getByPath(obj, pathStr) {
+  if (!obj || !pathStr) return undefined;
+  const segments = tokenizePathSegments(pathStr);
+  return resolveSegments(obj, segments, 0);
+}
+
+function matchesObjectSubset(actual, expected) {
+  if (!expected || typeof expected !== "object") {
+    return String(actual) === String(expected);
+  }
+  if (!actual || typeof actual !== "object") return false;
+  return Object.entries(expected).every(([k, v]) => {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      return matchesObjectSubset(actual[k], v);
+    }
+    return String(actual[k]) === String(v);
+  });
+}
+
+function evaluateAssertion(resource, assertion) {
+  const pathStr = assertion.path || assertion.fieldPath;
+  const operator = assertion.operator || "equals";
+  const expected = assertion.value !== undefined ? assertion.value : assertion.expectedValue;
+  const actual = getByPath(resource, pathStr);
+
+  switch (operator) {
+    case "exists": {
+      if (Array.isArray(actual)) {
+        return actual.some((item) => item !== undefined && item !== null);
+      }
+      return actual !== undefined && actual !== null;
+    }
+    case "equals": {
+      if (actual === undefined || actual === null) return false;
+      if (Array.isArray(actual) && !Array.isArray(expected)) {
+        return actual.some((item) => String(item) === String(expected));
+      }
+      return String(actual) === String(expected);
+    }
+    case "contains": {
+      if (actual === undefined || actual === null) return false;
+      if (Array.isArray(actual)) {
+        return actual.some(
+          (item) =>
+            String(item) === String(expected) ||
+            String(item).includes(String(expected)) ||
+            (typeof item === "object" && JSON.stringify(item).includes(String(expected)))
+        );
+      }
+      if (typeof actual === "object") {
+        return JSON.stringify(actual).includes(String(expected));
+      }
+      return String(actual).includes(String(expected));
+    }
+    case "notContains": {
+      if (actual === undefined || actual === null) return true;
+      if (Array.isArray(actual)) {
+        return !actual.some((item) => String(item).includes(String(expected)));
+      }
+      return !String(actual).includes(String(expected));
+    }
+    case "gte": {
+      if (Array.isArray(actual)) {
+        return actual.some((item) => Number(item) >= Number(expected));
+      }
+      return Number(actual) >= Number(expected);
+    }
+    case "lte": {
+      if (Array.isArray(actual)) {
+        return actual.some((item) => Number(item) <= Number(expected));
+      }
+      return Number(actual) <= Number(expected);
+    }
+    case "matchesObject": {
+      if (Array.isArray(actual)) {
+        return actual.some((item) => matchesObjectSubset(item, expected));
+      }
+      return matchesObjectSubset(actual, expected);
+    }
+    default:
+      return String(actual) === String(expected);
+  }
+}
+
+function evaluateGenericK8sCheck(check, resource) {
+  const assertions = Array.isArray(check.assertions) && check.assertions.length > 0
+    ? check.assertions
+    : check.fieldPath || check.path
+    ? [
+        {
+          path: check.fieldPath || check.path,
+          operator: check.operator || "equals",
+          value: check.expectedValue !== undefined ? check.expectedValue : check.value
+        }
+      ]
+    : [];
+
+  if (assertions.length === 0) {
+    return { passed: true, failedAssertion: null };
+  }
+
+  for (const assertion of assertions) {
+    if (!evaluateAssertion(resource, assertion)) {
+      return { passed: false, failedAssertion: assertion };
+    }
+  }
+  return { passed: true, failedAssertion: null };
+}
+
 function evaluateCheck(check, question, state) {
-  const wsSubdir = question.workspaceDir || question.id;
+  const wsSubdir = (question && (question.workspaceDir || question.id)) || "";
   const qDir = path.join(WORKSPACE_ROOT, wsSubdir);
 
   if (check.type === "file-contains") {
@@ -320,17 +574,20 @@ function evaluateCheck(check, question, state) {
         title: check.title,
         passed: false,
         detail: `ไม่พบไฟล์ ${filePath}`,
+        message: check.failHint || `ไม่พบไฟล์ ${filePath}`,
         failHint: check.failHint
       };
     }
     const content = fs.readFileSync(filePath, "utf8");
     const missing = (check.substrings || []).filter((s) => !content.includes(String(s)));
     const passed = missing.length === 0;
+    const detail = passed ? `พบข้อมูลครบถ้วนในไฟล์ ${check.filePath}` : `ในไฟล์ยังไม่มีข้อความ: ${missing.join(", ")}`;
     return {
       id: check.id,
       title: check.title,
       passed,
-      detail: passed ? `พบข้อมูลครบถ้วนในไฟล์ ${check.filePath}` : `ในไฟล์ยังไม่มีข้อความ: ${missing.join(", ")}`,
+      detail,
+      message: passed ? detail : (check.failHint || detail),
       failHint: passed ? null : check.failHint
     };
   }
@@ -344,12 +601,29 @@ function evaluateCheck(check, question, state) {
   );
 
   if (!r) {
+    const notFoundDetail = `ไม่พบ ${check.kind} ชื่อ "${check.name}"${check.namespace ? ` ใน Namespace "${check.namespace}"` : ""}`;
     return {
       id: check.id,
       title: check.title,
       passed: false,
-      detail: `ไม่พบ ${check.kind} ชื่อ "${check.name}"${check.namespace ? ` ใน Namespace "${check.namespace}"` : ""}`,
+      detail: notFoundDetail,
+      message: check.failHint || notFoundDetail,
       failHint: check.failHint
+    };
+  }
+
+  if (check.type === "k8s-field" || check.rule === "genericK8sCheck") {
+    const { passed, failedAssertion } = evaluateGenericK8sCheck(check, r);
+    const detail = passed
+      ? `ตรวจสอบ ${check.kind}/${check.name} ผ่านทุกเงื่อนไข`
+      : check.failHint || `ค่าที่พาธ ${failedAssertion?.path || ""} ของ ${check.kind}/${check.name} ยังไม่ตรงตามเงื่อนไข`;
+    return {
+      id: check.id,
+      title: check.title,
+      passed,
+      detail,
+      message: detail,
+      failHint: passed ? null : check.failHint
     };
   }
 
@@ -634,6 +908,11 @@ function evaluateCheck(check, question, state) {
         break;
       }
 
+      case "genericK8sCheck": {
+        passed = evaluateGenericK8sCheck(check, r).passed;
+        break;
+      }
+
       default:
         passed = true;
     }
@@ -643,6 +922,7 @@ function evaluateCheck(check, question, state) {
       title: check.title,
       passed,
       detail: passed ? "ผ่านเกณฑ์การตรวจสอบ" : check.failHint,
+      message: passed ? "ผ่านเกณฑ์การตรวจสอบ" : check.failHint,
       failHint: passed ? null : check.failHint
     };
   }
@@ -652,8 +932,13 @@ function evaluateCheck(check, question, state) {
     title: check.title,
     passed: false,
     detail: "Unknown check type",
+    message: check.failHint || "Unknown check type",
     failHint: check.failHint
   };
+}
+
+function evaluateSingleCheck(check, state, workspaceDir = "") {
+  return evaluateCheck(check, { workspaceDir }, state);
 }
 
 function verifyQuestion(question, timeSpentSeconds = 0, setId = "practice", recordAnalytics = true) {
@@ -810,9 +1095,13 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/lab/setup" && req.method === "POST") {
       const body = await readJsonBody(req);
       let question = body.question;
-      if (!question && body.blueprintId) {
-        const catalog = require("./data/ckadLabsData.js");
-        question = catalog.buildQuestion(body.blueprintId, body.seed || 100);
+      if (!question && (body.blueprintId || body.questionId)) {
+        const lookupId = body.blueprintId || body.questionId;
+        question = findSavedAiQuestion(lookupId);
+        if (!question) {
+          const catalog = require("./data/ckadLabsData.js");
+          question = catalog.buildQuestion(lookupId, body.seed || 100);
+        }
       }
       const result = setupQuestionEnvironment(question);
       return sendJson(res, 200, result);
@@ -821,9 +1110,13 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/lab/verify" && req.method === "POST") {
       const body = await readJsonBody(req);
       let question = body.question;
-      if (!question && body.blueprintId) {
-        const catalog = require("./data/ckadLabsData.js");
-        question = catalog.buildQuestion(body.blueprintId, body.seed || 100);
+      if (!question && (body.blueprintId || body.questionId)) {
+        const lookupId = body.blueprintId || body.questionId;
+        question = findSavedAiQuestion(lookupId);
+        if (!question) {
+          const catalog = require("./data/ckadLabsData.js");
+          question = catalog.buildQuestion(lookupId, body.seed || 100);
+        }
       }
       if (!question) {
         return sendJson(res, 400, { ok: false, error: "Missing question object" });
@@ -835,6 +1128,55 @@ const server = http.createServer(async (req, res) => {
         body.recordAnalytics !== false
       );
       return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/lab/ai-questions" && req.method === "GET") {
+      const store = loadAiLabs();
+      return sendJson(res, 200, {
+        ok: true,
+        questions: store.questions || [],
+        sets: store.sets || [],
+        archetypes: aiSynthesizer.AI_ARCHETYPES.map((a) => ({
+          archetypeId: a.archetypeId,
+          domainId: a.domainId,
+          keywords: a.keywords
+        }))
+      });
+    }
+
+    if (pathname === "/api/lab/ai-generate" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      if (body.action === "clear") {
+        const emptyStore = { updatedAt: new Date().toISOString(), questions: [], sets: [] };
+        saveAiLabs(emptyStore);
+        return sendJson(res, 200, { ok: true, questions: [], sets: [] });
+      }
+
+      const hasGeminiKey = Boolean((body.geminiApiKey && String(body.geminiApiKey).trim()) || process.env.GEMINI_API_KEY);
+      const genResult = hasGeminiKey
+        ? await aiSynthesizer.generateWithGemini(body)
+        : aiSynthesizer.generateWithCompositionalAI(body);
+
+      const store = loadAiLabs();
+      for (const q of genResult.questions || []) {
+        store.questions = [q, ...store.questions.filter((item) => item.id !== q.id)].slice(0, 120);
+      }
+      if (genResult.examSet) {
+        store.sets = [genResult.examSet, ...store.sets.filter((s) => s.id !== genResult.examSet.id)].slice(0, 30);
+      }
+      saveAiLabs(store);
+
+      return sendJson(res, 200, {
+        ok: true,
+        engineUsed: genResult.engineUsed,
+        fallbackReason: genResult.fallbackReason || null,
+        questions: genResult.questions || [],
+        examSet: genResult.examSet || null,
+        savedCount: {
+          questions: store.questions.length,
+          sets: store.sets.length
+        }
+      });
     }
 
     if (pathname === "/api/lab/analytics" && req.method === "GET") {

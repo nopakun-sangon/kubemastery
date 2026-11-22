@@ -35,6 +35,11 @@ class KubeMasteryApp {
     this.cliCategoryFilter = "ALL";
     this.cliLastFeedback = null;
 
+    // CLI Tips & Command Reference state
+    this.cliTipsCategoryFilter = "all";
+    this.cliTipsSearchTerm = "";
+    this.cliTipsQuickTableOpen = true;
+
     // Current Share State
     this.currentShareData = null;
 
@@ -480,6 +485,9 @@ class KubeMasteryApp {
       const ckadTab = parts[1] || this.ckadTab || "exam";
       const blueprintId = parts[2] || null;
       this.navigateTo("ckad-labs", { ckadTab, blueprintId }, false);
+    } else if (route === "cli-tips") {
+      const tipCategory = parts[1] || "all";
+      this.navigateTo("cli-tips", { tipCategory }, false);
     } else if (route === "cli-playground") {
       const drillIndex = parts[1] ? parseInt(parts[1], 10) : 0;
       this.navigateTo("cli-playground", { drillIndex: isNaN(drillIndex) ? 0 : drillIndex }, false);
@@ -498,6 +506,7 @@ class KubeMasteryApp {
     if (params.conceptPageId !== undefined) this.activeConceptPageId = params.conceptPageId;
     if (params.taskPageId !== undefined) this.activeTaskPageId = params.taskPageId;
     if (params.drillIndex !== undefined) this.cliDrillIndex = params.drillIndex;
+    if (params.tipCategory !== undefined) this.cliTipsCategoryFilter = params.tipCategory;
     if (params.ckadTab !== undefined && ["exam", "sets", "analytics"].includes(params.ckadTab)) {
       this.ckadTab = params.ckadTab;
       if (this.ckadLabState) {
@@ -532,6 +541,10 @@ class KubeMasteryApp {
       } else if (view === "ckad-labs") {
         if (this.ckadTab && this.ckadTab !== "exam") {
           newHash = `#/ckad-labs/${this.ckadTab}`;
+        }
+      } else if (view === "cli-tips") {
+        if (this.cliTipsCategoryFilter && this.cliTipsCategoryFilter !== "all") {
+          newHash = `#/cli-tips/${this.cliTipsCategoryFilter}`;
         }
       } else if (view === "cli-playground") {
         if (this.cliDrillIndex > 0) newHash = `#/cli-playground/${this.cliDrillIndex}`;
@@ -678,6 +691,9 @@ class KubeMasteryApp {
         break;
       case "ckad-labs":
         container.innerHTML = this.renderCkadLabsView();
+        break;
+      case "cli-tips":
+        container.innerHTML = this.renderCliTipsView();
         break;
       case "cli-playground":
         container.innerHTML = this.renderCliPlaygroundView();
@@ -2209,6 +2225,348 @@ class KubeMasteryApp {
   }
 
   // ===========================================================================
+  // VIEW: CLI TIPS & COMMAND REFERENCE (รวมคำสั่งที่ใช้บ่อย + อธิบายการทำงาน + ตัวอย่าง)
+  // ===========================================================================
+  setCliTipsCategory(catId) {
+    this.cliTipsCategoryFilter = catId || "all";
+    this.navigateTo("cli-tips", { tipCategory: this.cliTipsCategoryFilter });
+  }
+
+  setCliTipsSearch(val) {
+    this.cliTipsSearchTerm = String(val || "");
+    const resultsBox = document.getElementById("cli-tips-cards-container");
+    if (resultsBox) {
+      resultsBox.innerHTML = this.renderCliTipsCardsList();
+    } else {
+      this.render();
+    }
+  }
+
+  toggleCliTipsQuickTable() {
+    this.cliTipsQuickTableOpen = !this.cliTipsQuickTableOpen;
+    this.render();
+  }
+
+  openCliTip(tipId, categoryId = "all") {
+    this.cliTipsCategoryFilter = categoryId || "all";
+    this.cliTipsSearchTerm = "";
+    this.navigateTo("cli-tips", { tipCategory: this.cliTipsCategoryFilter });
+    setTimeout(() => {
+      const el = document.getElementById(`cli-tip-card-${tipId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-amber-400");
+        setTimeout(() => el.classList.remove("ring-2", "ring-amber-400"), 2200);
+      }
+    }, 120);
+  }
+
+  renderCliTipsCardsList() {
+    const catalog = window.CLI_TIPS_DATA || { categories: [], items: [] };
+    const catFilter = this.cliTipsCategoryFilter || "all";
+    const query = (this.cliTipsSearchTerm || "").trim().toLowerCase();
+
+    const filtered = (catalog.items || []).filter((item) => {
+      const matchCat = catFilter === "all" || item.categoryId === catFilter;
+      if (!matchCat) return false;
+      if (!query) return true;
+      const hay = `${item.title} ${item.categoryTitle} ${item.command} ${item.howItWorks} ${item.exampleCode || ""} ${item.examTip || ""} ${(item.flags || []).map((f) => `${f.flag} ${f.desc}`).join(" ")}`.toLowerCase();
+      return hay.includes(query);
+    });
+
+    if (filtered.length === 0) {
+      return `
+        <div class="p-10 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-2">
+          <div class="text-base font-black text-slate-700 dark:text-slate-200">ไม่พบคำสั่งที่ตรงกับการค้นหา</div>
+          <p class="text-xs text-slate-400">ลองเปลี่ยนหมวดหมู่หรือค้นหาด้วยคำสำคัญอื่น เช่น <code class="font-mono">run</code>, <code class="font-mono">expose</code>, <code class="font-mono">ingress</code>, <code class="font-mono">rbac</code>, <code class="font-mono">explain</code></p>
+        </div>
+      `;
+    }
+
+    return filtered
+      .map((tip, idx) => {
+        const isCritical = tip.importance === "CRITICAL";
+        return `
+          <article id="cli-tip-card-${this.escapeHtml(tip.id)}" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 transition-all">
+            <!-- Top Badges & Title -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3.5 border-b border-slate-100 dark:border-slate-800">
+              <div class="space-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-black text-[11px]">
+                    #${idx + 1} • ${this.escapeHtml(tip.categoryTitle)}
+                  </span>
+                  <span class="px-2.5 py-0.5 rounded-full ${
+                    isCritical
+                      ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                      : "bg-blue-500/15 text-blue-600 dark:text-cyan-400"
+                  } font-black text-[11px]">
+                    ${isCritical ? "🔥 ออกสอบบ่อยมาก (MUST-KNOW)" : "⭐ สำคัญ (HIGH VALUE)"}
+                  </span>
+                  <span class="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono text-[11px] font-bold">
+                    ${this.escapeHtml(tip.examTag || "CKAD & CKA")}
+                  </span>
+                </div>
+                <h2 class="text-base sm:text-xl font-black text-slate-900 dark:text-white pt-1">
+                  ${this.escapeHtml(tip.title)}
+                </h2>
+              </div>
+
+              <button onclick='window.app.copyText(${JSON.stringify(tip.command)}, "คัดลอกคำสั่งหลักเรียบร้อยแล้ว!")'
+                class="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-sm shrink-0 cursor-pointer flex items-center gap-1.5 self-start sm:self-center">
+                <span>📋 Copy คำสั่ง</span>
+              </button>
+            </div>
+
+            <!-- 1. Primary Command Block -->
+            <div class="space-y-1.5">
+              <div class="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                ⌨️ รูปแบบคำสั่งที่ใช้บ่อย (Command Syntax):
+              </div>
+              <div class="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-inner">
+                <pre class="p-4 text-xs sm:text-sm font-mono text-emerald-300 overflow-x-auto leading-relaxed select-all">${this.escapeHtml(tip.command)}</pre>
+              </div>
+            </div>
+
+            <!-- 2. How It Works Explanation -->
+            <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-2.5">
+              <div class="text-xs font-black text-blue-600 dark:text-cyan-400 flex items-center gap-1.5">
+                <span>📖 อธิบายหลักการทำงาน (How It Works):</span>
+              </div>
+              <div class="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed space-y-1.5">
+                ${this.formatMarkdown(tip.howItWorks)}
+              </div>
+            </div>
+
+            <!-- 3. Flags & Parameters Breakdown Table -->
+            ${
+              tip.flags && tip.flags.length
+                ? `
+                  <div class="space-y-2">
+                    <div class="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>🏷️ เจาะลึกแต่ละพารามิเตอร์และ Flag (Parameters &amp; Flags Breakdown):</span>
+                    </div>
+                    <div class="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+                      <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr class="bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700">
+                            <th class="py-2.5 px-3.5 w-1/3">Flag / พารามิเตอร์</th>
+                            <th class="py-2.5 px-3.5">หน้าที่และการทำงาน</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900/50">
+                          ${tip.flags
+                            .map(
+                              (fl) => `
+                                <tr>
+                                  <td class="py-2.5 px-3.5 font-mono font-bold text-cyan-600 dark:text-cyan-300 align-top">
+                                    <code>${this.escapeHtml(fl.flag)}</code>
+                                  </td>
+                                  <td class="py-2.5 px-3.5 text-slate-700 dark:text-slate-300 align-top leading-relaxed">
+                                    ${this.formatInlineMarkdown(fl.desc)}
+                                  </td>
+                                </tr>
+                              `
+                            )
+                            .join("")}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                `
+                : ""
+            }
+
+            <!-- 4. Real-World Example Code -->
+            ${
+              tip.exampleCode
+                ? `
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-black text-slate-900 dark:text-white">
+                        💻 ตัวอย่างการนำไปใช้งานจริง (Practical Examples):
+                      </span>
+                      <button onclick='window.app.copyText(${JSON.stringify(tip.exampleCode)}, "คัดลอกโค้ดตัวอย่างเรียบร้อยแล้ว!")'
+                        class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] cursor-pointer">
+                        📋 Copy ตัวอย่าง
+                      </button>
+                    </div>
+                    <div class="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950">
+                      <pre class="p-4 text-xs font-mono text-sky-200 overflow-x-auto leading-relaxed">${this.escapeHtml(tip.exampleCode)}</pre>
+                    </div>
+                  </div>
+                `
+                : ""
+            }
+
+            <!-- 5. Exam Pro-Tip Box -->
+            ${
+              tip.examTip
+                ? `
+                  <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-xs sm:text-sm">
+                    <span class="text-lg leading-none shrink-0">💡</span>
+                    <div class="space-y-0.5 text-slate-800 dark:text-amber-100 leading-relaxed">
+                      <strong class="font-black text-amber-700 dark:text-amber-300">เทคนิคในห้องสอบจริง (Exam Pro-Tip):</strong>
+                      <span>${this.formatInlineMarkdown(tip.examTip)}</span>
+                    </div>
+                  </div>
+                `
+                : ""
+            }
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  renderCliTipsView() {
+    const catalog = window.CLI_TIPS_DATA || { categories: [], items: [], quickTable: [] };
+    const categories = catalog.categories || [];
+    const quickTable = catalog.quickTable || [];
+    const activeCat = this.cliTipsCategoryFilter || "all";
+
+    return `
+      <div class="space-y-6 animate-fadeIn max-w-6xl mx-auto w-full pb-16">
+        <!-- Hero Header Banner -->
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-amber-950/60 to-slate-900 border border-amber-500/30 p-6 sm:p-8 text-white shadow-xl">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div class="space-y-2.5 max-w-3xl">
+              <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 text-xs font-black uppercase tracking-wider">
+                <span>💡 KUBECTL COMMAND REFERENCE &amp; EXAM CHEATSHEET</span>
+              </div>
+              <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                💡 รวมคำสั่ง kubectl ที่ใช้บ่อย พร้อมอธิบายการทำงานและตัวอย่างจริง
+              </h1>
+              <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                สรุปทุกคำสั่งลัด Imperative CLI, การตั้งค่า Alias/Vim ก่อนเริ่มสอบ, คำอธิบายการทำงานของแต่ละ Flag แบบเจาะลึก และตัวอย่างการแก้โจทย์จริงในสนามสอบ CKAD &amp; CKA
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+              <button onclick="window.app.navigateTo('ckad-labs')"
+                class="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-lg cursor-pointer">
+                🧪 ไปหน้าห้องสอบ CKAD Labs
+              </button>
+              <button onclick="window.app.navigateTo('cli-playground')"
+                class="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs cursor-pointer">
+                ⌨️ ฝึกพิมพ์ใน CLI Playground
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible Quick 10 One-Liner Cheat Table -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+          <button onclick="window.app.toggleCliTipsQuickTable()"
+            class="w-full px-5 sm:px-6 py-4 flex items-center justify-between gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <span class="text-lg">⚡</span>
+              <span class="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                ตารางสรุป 10 คำสั่งลัดบรรทัดเดียวที่ใช้บ่อยที่สุด (Quick One-Liner Cheat Sheet)
+              </span>
+              <span class="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[11px] font-bold">
+                คลิกเพื่อพับ/กางตาราง
+              </span>
+            </div>
+            <span class="text-xs font-bold text-slate-400">
+              ${this.cliTipsQuickTableOpen ? "▲ ซ่อนตาราง" : "▼ แสดงตาราง"}
+            </span>
+          </button>
+
+          ${
+            this.cliTipsQuickTableOpen
+              ? `
+                <div class="px-5 sm:px-6 pb-5 pt-2 border-t border-slate-100 dark:border-slate-800 overflow-x-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="border-b border-slate-200 dark:border-slate-800 text-slate-400 font-bold">
+                        <th class="py-2.5 px-3 w-1/3">เป้าหมาย / สิ่งที่ต้องการทำ</th>
+                        <th class="py-2.5 px-3">คำสั่งลัด (คลิกปุ่ม Copy ไปรันใน Terminal ได้เลย)</th>
+                        <th class="py-2.5 px-3 w-20 text-right">คัดลอก</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                      ${quickTable
+                        .map(
+                          (row) => `
+                            <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                              <td class="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-200">
+                                ${this.escapeHtml(row.action)}
+                              </td>
+                              <td class="py-2.5 px-3 font-mono text-emerald-600 dark:text-emerald-300">
+                                <code class="select-all">${this.escapeHtml(row.cmd)}</code>
+                              </td>
+                              <td class="py-2.5 px-3 text-right">
+                                <button onclick='window.app.copyText(${JSON.stringify(row.cmd)}, "คัดลอกคำสั่งลัดแล้ว!")'
+                                  class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-700 dark:text-slate-200 font-bold text-[11px] transition-colors cursor-pointer">
+                                  📋 Copy
+                                </button>
+                              </td>
+                            </tr>
+                          `
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `
+              : ""
+          }
+        </div>
+
+        <!-- Search Input & Category Filter Pills -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div class="relative flex-1">
+              <input
+                id="cli-tips-search-input"
+                type="text"
+                value="${this.escapeHtml(this.cliTipsSearchTerm)}"
+                oninput="window.app.setCliTipsSearch(this.value)"
+                placeholder="ค้นหาคำสั่ง, ชื่อ Flag, หรือสถานการณ์ เช่น --dry-run, ingress, rbac, rollout, explain, pvc..."
+                class="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-amber-500 focus:outline-none text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400"
+              />
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+            </div>
+            ${
+              this.cliTipsSearchTerm
+                ? `<button onclick="window.app.setCliTipsSearch(''); document.getElementById('cli-tips-search-input').value='';"
+                    class="px-3.5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
+                    ✕ ล้างคำค้นหา
+                  </button>`
+                : ""
+            }
+          </div>
+
+          <!-- 10 Category Filter Buttons -->
+          <div class="flex flex-wrap items-center gap-2">
+            ${categories
+              .map((cat) => {
+                const isActive = activeCat === cat.id;
+                return `
+                  <button onclick="window.app.setCliTipsCategory('${cat.id}')"
+                    class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isActive
+                        ? "bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }">
+                    <span>${cat.icon}</span>
+                    <span>${this.escapeHtml(cat.title)}</span>
+                  </button>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
+
+        <!-- Detailed Command Cards Container -->
+        <div id="cli-tips-cards-container" class="space-y-5">
+          ${this.renderCliTipsCardsList()}
+        </div>
+      </div>
+    `;
+  }
+
+  // ===========================================================================
   // VIEW: CKAD HANDS-ON EXAM LABS (OFFICIAL PSI BRIDGE CONSOLE + REAL TERMINAL)
   // ===========================================================================
   initCkadLabsState() {
@@ -2249,10 +2607,17 @@ class KubeMasteryApp {
 
     let savedName = "";
     let savedEmail = "candidate@linuxfoundation.org";
+    let savedGeminiKey = "";
+    let savedAiMap = {};
     try {
       savedName = localStorage.getItem("ckad_candidate_name") || "";
       savedEmail = localStorage.getItem("ckad_candidate_email") || "candidate@linuxfoundation.org";
+      savedGeminiKey = localStorage.getItem("ckad_gemini_api_key") || "";
+      const rawAi = localStorage.getItem("kubemastery_ai_questions_v1");
+      if (rawAi) savedAiMap = JSON.parse(rawAi) || {};
     } catch (_) {}
+
+    this.ckadAiQuestionsMap = savedAiMap;
 
     const durationSec = ((this.ckadActiveSet && this.ckadActiveSet.durationMinutes) || 120) * 60;
     this.ckadLabState = {
@@ -2266,7 +2631,14 @@ class KubeMasteryApp {
       flaggedQuestions: {},
       examSubmitted: false,
       lastScoreReport: null,
-      showThaiTranslation: false
+      showThaiTranslation: false,
+      aiModalOpen: false,
+      aiGenerating: false,
+      aiMode: "single",
+      aiDomainId: "all",
+      aiDifficulty: "standard",
+      aiCustomPrompt: "",
+      geminiApiKey: savedGeminiKey
     };
   }
 
@@ -2404,8 +2776,23 @@ class KubeMasteryApp {
       ? setDef.questionIds
       : (catalog.blueprints || []).map((b) => b.id);
 
+    if (Array.isArray(setDef.questions) && setDef.questions.length && !randomizeSeeds) {
+      return {
+        id: setDef.id || "custom-set",
+        badge: setDef.badge || "Custom Set",
+        title: setDef.title || "CKAD Practice Set",
+        description: setDef.description || "ชุดฝึกทำข้อสอบ CKAD ผ่าน Terminal จริง",
+        durationMinutes: setDef.durationMinutes || setDef.questions.length * 6,
+        seedBase: baseSeed,
+        questions: setDef.questions
+      };
+    }
+
     const questions = qIds
       .map((qId, idx) => {
+        if (this.ckadAiQuestionsMap && this.ckadAiQuestionsMap[qId]) {
+          return this.ckadAiQuestionsMap[qId];
+        }
         const seed = baseSeed + idx + 1;
         if (typeof catalog.buildQuestion === "function") {
           return catalog.buildQuestion(qId, seed);
@@ -2995,6 +3382,379 @@ class KubeMasteryApp {
     return this.generateNewRandomExamSet(questionCount);
   }
 
+  // ===========================================================================
+  // AI LIVE QUESTION & EXAM SET GENERATOR STUDIO
+  // ===========================================================================
+  openCkadAiGeneratorModal(mode = "single") {
+    if (!this.ckadLabState) return;
+    this.ckadLabState.aiModalOpen = true;
+    this.ckadLabState.aiMode = mode === "set" ? "set" : "single";
+    this.render();
+  }
+
+  closeCkadAiGeneratorModal() {
+    if (!this.ckadLabState) return;
+    this.ckadLabState.aiModalOpen = false;
+    this.ckadLabState.aiGenerating = false;
+    this.render();
+  }
+
+  setCkadAiMode(mode) {
+    if (!this.ckadLabState) return;
+    this.ckadLabState.aiMode = mode === "set" ? "set" : "single";
+    this.render();
+  }
+
+  setCkadAiDomain(domainId) {
+    if (!this.ckadLabState) return;
+    this.ckadLabState.aiDomainId = domainId || "all";
+  }
+
+  setCkadAiDifficulty(diff) {
+    if (!this.ckadLabState) return;
+    this.ckadLabState.aiDifficulty = diff === "hard" ? "hard" : "standard";
+    this.render();
+  }
+
+  setCkadAiPrompt(val) {
+    if (!this.ckadLabState) return;
+    this.ckadLabState.aiCustomPrompt = String(val || "");
+    const input = document.getElementById("ckad-ai-custom-prompt-input");
+    if (input && input.value !== this.ckadLabState.aiCustomPrompt) {
+      input.value = this.ckadLabState.aiCustomPrompt;
+    }
+  }
+
+  setCkadGeminiApiKey(val) {
+    if (!this.ckadLabState) return;
+    this.ckadLabState.geminiApiKey = String(val || "").trim();
+    try {
+      localStorage.setItem("ckad_gemini_api_key", this.ckadLabState.geminiApiKey);
+    } catch (_) {}
+  }
+
+  async submitCkadAiGenerator() {
+    if (!this.ckadLabState || this.ckadLabState.aiGenerating) return null;
+    this.ckadLabState.aiGenerating = true;
+    this.render();
+
+    const mode = this.ckadLabState.aiMode || "single";
+    const domainId = this.ckadLabState.aiDomainId || "all";
+    const difficulty = this.ckadLabState.aiDifficulty || "standard";
+    const customPrompt = (this.ckadLabState.aiCustomPrompt || "").trim();
+    const geminiApiKey = (this.ckadLabState.geminiApiKey || "").trim();
+    const count = mode === "set" ? 16 : 1;
+
+    let aiResponse = null;
+    if (typeof fetch === "function") {
+      try {
+        const res = await fetch(this.getCkadApiUrl("/api/lab/ai-generate"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode,
+            count,
+            domainId,
+            difficulty,
+            customPrompt,
+            geminiApiKey
+          })
+        });
+        if (res && res.ok) {
+          aiResponse = await res.json();
+          this.ckadBackendOnline = true;
+        }
+      } catch (_) {
+        this.ckadBackendOnline = false;
+      }
+    }
+
+    // Offline fallback if server is unreachable
+    if (!aiResponse || !aiResponse.ok || !Array.isArray(aiResponse.questions) || !aiResponse.questions.length) {
+      const catalog = window.CKAD_LABS_DATA || { blueprints: [], buildQuestion: () => null };
+      const pool = domainId !== "all"
+        ? (catalog.blueprints || []).filter((b) => b.domainId === domainId)
+        : (catalog.blueprints || []);
+      const picked = [...(pool.length ? pool : catalog.blueprints || [])].sort(() => Math.random() - 0.5).slice(0, count);
+      const seedBase = Math.floor(1000 + Math.random() * 8000);
+      const questions = picked.map((bp, i) => {
+        const q = bp.build(seedBase + i * 17);
+        q.aiGenerated = true;
+        q.aiEngine = "AI Compositional Synthesizer";
+        return q;
+      });
+      aiResponse = {
+        ok: true,
+        engineUsed: "AI Compositional Synthesizer",
+        questions,
+        examSet: mode === "set" ? {
+          id: `ai-set-${seedBase}`,
+          badge: `🤖 AI Exam Set #${seedBase}`,
+          title: `AI Synthesized CKAD Exam (${customPrompt || domainId.toUpperCase()})`,
+          description: `16-Task AI-generated CKAD mock exam (${difficulty.toUpperCase()} difficulty).`,
+          durationMinutes: 120,
+          passingScore: 66,
+          seedBase,
+          questionIds: questions.map((q) => q.id),
+          questions
+        } : null
+      };
+    }
+
+    this.ckadAiQuestionsMap = this.ckadAiQuestionsMap || {};
+    (aiResponse.questions || []).forEach((q) => {
+      if (q && q.id) {
+        this.ckadAiQuestionsMap[q.id] = q;
+      }
+    });
+    try {
+      localStorage.setItem("kubemastery_ai_questions_v1", JSON.stringify(this.ckadAiQuestionsMap));
+    } catch (_) {}
+
+    this.ckadLabState.aiGenerating = false;
+    this.ckadLabState.aiModalOpen = false;
+
+    if (mode === "set" && aiResponse.examSet) {
+      const newSet = aiResponse.examSet;
+      this.ckadCustomSets.unshift(newSet);
+      this.saveCkadCustomSets();
+      this.ckadActiveSet = this.buildCkadSetInstance(newSet, false);
+      this.ckadQuestionIndex = 0;
+      this.ckadGradeResults = {};
+      this.ckadLabState.selectedSetId = newSet.id;
+      this.showToast(`🤖 AI สร้างชุดข้อสอบใหม่สำเร็จ: ${newSet.badge} (${newSet.questions.length} ข้อ)!`, "success");
+      this.render();
+      if (this.ckadLabState.examSessionActive) {
+        await this.setupCkadLabEnvironment(true);
+      }
+      return aiResponse;
+    }
+
+    // Single task mode: load into current active exam session & provision immediately
+    const newQ = aiResponse.questions[0];
+    if (newQ) {
+      if (!this.ckadActiveSet || !Array.isArray(this.ckadActiveSet.questions)) {
+        this.ckadActiveSet = {
+          id: "ai-custom-session",
+          badge: "🤖 AI Custom Lab",
+          title: newQ.title,
+          durationMinutes: 120,
+          questions: [newQ]
+        };
+        this.ckadQuestionIndex = 0;
+      } else {
+        this.ckadActiveSet.questions[this.ckadQuestionIndex] = newQ;
+      }
+      this.ckadTimerSeconds = 0;
+      this.ckadTimerRunning = true;
+      this.ckadTab = "exam";
+      this.ckadLabState.subView = "exam";
+      if (!this.ckadLabState.examSessionActive) {
+        this.ckadLabState.examSessionActive = true;
+        this.ckadLabState.candidateName = this.ckadLabState.candidateName || "Kubestronaut";
+      }
+      this.showToast(`🤖 AI สร้างโจทย์ใหม่พร้อมเตรียม Local Env แล้ว: ${newQ.title}`, "success");
+      this.render();
+      await this.setupCkadLabEnvironment(true);
+    }
+    return aiResponse;
+  }
+
+  renderCkadAiGeneratorModal() {
+    if (!this.ckadLabState || !this.ckadLabState.aiModalOpen) return "";
+    const mode = this.ckadLabState.aiMode || "single";
+    const domainId = this.ckadLabState.aiDomainId || "all";
+    const difficulty = this.ckadLabState.aiDifficulty || "standard";
+    const customPrompt = this.ckadLabState.aiCustomPrompt || "";
+    const geminiKey = this.ckadLabState.geminiApiKey || "";
+    const busy = Boolean(this.ckadLabState.aiGenerating);
+
+    const quickPrompts = [
+      "StatefulSet + Headless Service",
+      "HPA Autoscaling (CPU 70%)",
+      "DaemonSet Node Log Agent",
+      "Taints, Tolerations & NodeSelector",
+      "Downward API Env & Volume",
+      "LimitRange Container Defaults",
+      "Parallel Batch Job BackoffLimit",
+      "Ambassador Multi-Container Proxy",
+      "ConfigMap SubPath Single File",
+      "Fix Broken RBAC Forbidden Error",
+      "Fix Pending PVC StorageClass Mismatch",
+      "NetworkPolicy Ingress + Egress DNS 53",
+      "StartupProbe + LivenessProbe Fix"
+    ];
+
+    return `
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+        <div class="relative w-full max-w-2xl bg-slate-900 border border-indigo-500/40 rounded-3xl shadow-2xl text-slate-100 overflow-hidden max-h-[92vh] flex flex-col">
+          <!-- Modal Header -->
+          <div class="px-6 py-4 bg-gradient-to-r from-indigo-950 via-purple-950 to-slate-900 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl">🤖</span>
+              <div>
+                <h3 class="text-base sm:text-lg font-black text-white">
+                  AI Live CKAD Question &amp; Exam Set Synthesizer
+                </h3>
+                <p class="text-[11px] text-indigo-300">
+                  สังเคราะห์โจทย์ใหม่สดๆ พร้อมไฟล์ YAML ตั้งต้นและกฎการตรวจใน Local Env (รองรับ Gemini API &amp; Built-in AI Synthesizer)
+                </p>
+              </div>
+            </div>
+            <button onclick="window.app.closeCkadAiGeneratorModal()" class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-slate-300 text-xs font-bold cursor-pointer">
+              ✕ ปิด
+            </button>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="p-6 overflow-y-auto space-y-5 text-xs">
+            <!-- 1. Mode Selection -->
+            <div class="space-y-2">
+              <label class="block font-black uppercase tracking-wider text-slate-300">
+                1. เลือกรูปแบบการสร้าง (Generation Mode):
+              </label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button type="button" onclick="window.app.setCkadAiMode('single')"
+                  class="p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    mode === "single"
+                      ? "bg-indigo-600/25 border-indigo-400 text-white ring-1 ring-indigo-400"
+                      : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }">
+                  <div class="font-black text-sm">⚡ สร้างโจทย์ใหม่รายข้อ (Single AI Task)</div>
+                  <div class="text-[11px] text-slate-300 mt-0.5">AI สร้างโจทย์ใหม่และเตรียม Local Env ให้เปิดทำทันที</div>
+                </button>
+                <button type="button" onclick="window.app.setCkadAiMode('set')"
+                  class="p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    mode === "set"
+                      ? "bg-purple-600/25 border-purple-400 text-white ring-1 ring-purple-400"
+                      : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }">
+                  <div class="font-black text-sm">📦 สร้างชุดข้อสอบใหม่ทั้งชุด (16 Tasks • 120 Mins)</div>
+                  <div class="text-[11px] text-slate-300 mt-0.5">AI สังเคราะห์ข้อสอบชุดใหม่ 16 ข้อครบทุกหมวด</div>
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. Domain & Difficulty -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1.5">
+                <label class="block font-black uppercase tracking-wider text-slate-300">
+                  2. หมวดวิชา (CKAD Domain):
+                </label>
+                <select onchange="window.app.setCkadAiDomain(this.value)"
+                  class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-bold focus:border-indigo-400 focus:outline-none">
+                  <option value="all" ${domainId === "all" ? "selected" : ""}>All 5 Official CKAD Domains</option>
+                  <option value="domain-1" ${domainId === "domain-1" ? "selected" : ""}>Domain 1: Application Design &amp; Build (20%)</option>
+                  <option value="domain-2" ${domainId === "domain-2" ? "selected" : ""}>Domain 2: Application Deployment (20%)</option>
+                  <option value="domain-3" ${domainId === "domain-3" ? "selected" : ""}>Domain 3: Observability &amp; Maintenance (15%)</option>
+                  <option value="domain-4" ${domainId === "domain-4" ? "selected" : ""}>Domain 4: Environment, Config &amp; Security (25%)</option>
+                  <option value="domain-5" ${domainId === "domain-5" ? "selected" : ""}>Domain 5: Services &amp; Networking (20%)</option>
+                </select>
+              </div>
+
+              <div class="space-y-1.5">
+                <label class="block font-black uppercase tracking-wider text-slate-300">
+                  3. ระดับความยาก (Difficulty):
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" onclick="window.app.setCkadAiDifficulty('standard')"
+                    class="py-2.5 px-3 rounded-xl border font-bold cursor-pointer ${
+                      difficulty === "standard"
+                        ? "bg-emerald-600/25 border-emerald-400 text-emerald-300"
+                        : "bg-slate-950 border-slate-800 text-slate-400"
+                    }">
+                    ⚡ Standard CKAD
+                  </button>
+                  <button type="button" onclick="window.app.setCkadAiDifficulty('hard')"
+                    class="py-2.5 px-3 rounded-xl border font-bold cursor-pointer ${
+                      difficulty === "hard"
+                        ? "bg-rose-600/25 border-rose-400 text-rose-300"
+                        : "bg-slate-950 border-slate-800 text-slate-400"
+                    }">
+                    🔥 Hard / Multi-Fault
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Custom Scenario Prompt + Quick Topic Pills -->
+            <div class="space-y-2">
+              <label for="ckad-ai-custom-prompt-input" class="block font-black uppercase tracking-wider text-slate-300">
+                4. สั่งหัวข้อหรือสถานการณ์ที่ต้องการฝึก (คลิกเลือกหัวข้อด้านล่าง หรือพิมพ์สั่งเองได้ทั้งไทย/อังกฤษ):
+              </label>
+              <input
+                id="ckad-ai-custom-prompt-input"
+                type="text"
+                value="${this.escapeHtml(customPrompt)}"
+                oninput="window.app.setCkadAiPrompt(this.value)"
+                placeholder="เช่น StatefulSet + Headless Service, ซ่อม RBAC Forbidden, HPA Autoscaling, Taints & Tolerations..."
+                class="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-indigo-400 focus:outline-none text-white font-bold placeholder-slate-500"
+              />
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                ${quickPrompts
+                  .map(
+                    (qp) => `
+                      <button type="button" onclick='window.app.setCkadAiPrompt(${JSON.stringify(qp)}); window.app.render();'
+                        class="px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all cursor-pointer ${
+                          customPrompt === qp
+                            ? "bg-indigo-600 text-white border-indigo-400 font-bold"
+                            : "bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800"
+                        }">
+                        + ${this.escapeHtml(qp)}
+                      </button>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
+
+            <!-- 4. Optional Gemini API Key -->
+            <details class="rounded-2xl bg-slate-950 border border-slate-800 p-3.5">
+              <summary class="font-bold text-indigo-300 cursor-pointer flex items-center justify-between">
+                <span>🔑 ตั้งค่า Google Gemini API Key (Optional — ไม่ใส่ก็สร้างโจทย์ใหม่ได้ทันทีด้วย Built-in AI)</span>
+                <span class="text-[10px]">▼</span>
+              </summary>
+              <div class="mt-3 space-y-2">
+                <input
+                  type="password"
+                  value="${this.escapeHtml(geminiKey)}"
+                  oninput="window.app.setCkadGeminiApiKey(this.value)"
+                  placeholder="AIzaSy... (เว้นว่างไว้เพื่อใช้ Built-in AI Compositional Synthesizer)"
+                  class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-xs"
+                />
+                <p class="text-[11px] text-slate-400 leading-relaxed">
+                  หากใส่ Gemini API Key ระบบจะเรียก <code class="font-mono text-cyan-300">gemini-2.0-flash</code> แต่งโจทย์ใหม่สดๆ หากเว้นว่างไว้ ระบบจะใช้ <strong>Built-in AI Compositional Synthesizer (16 Advanced Archetypes)</strong> สร้างโจทย์ใหม่ให้ทันทีโดยไม่ต้องต่อเน็ต
+                </p>
+              </div>
+            </details>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="px-6 py-4 bg-slate-950 border-t border-slate-800 flex items-center justify-end gap-3">
+            <button type="button" onclick="window.app.closeCkadAiGeneratorModal()"
+              class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer">
+              ยกเลิก
+            </button>
+            <button
+              id="ckad-ai-generate-submit-btn"
+              type="button"
+              onclick="window.app.submitCkadAiGenerator()"
+              ${busy ? "disabled" : ""}
+              class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 cursor-pointer disabled:opacity-50 flex items-center gap-2">
+              <span>${
+                busy
+                  ? "⏳ AI กำลังสังเคราะห์โจทย์ + ไฟล์ YAML + กฎตรวจ..."
+                  : mode === "set"
+                  ? "🤖 ให้ AI สร้างชุดข้อสอบใหม่ 16 ข้อทันที"
+                  : "🤖 ให้ AI สร้างโจทย์ข้อใหม่และเตรียม Local Env ทันที"
+              }</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   startCkadDomainPractice(domainId, randomizeSeeds = false) {
     const catalog = window.CKAD_LABS_DATA || { domains: [], blueprints: [] };
     const dom = (catalog.domains || []).find((d) => d.id === domainId);
@@ -3464,6 +4224,7 @@ class KubeMasteryApp {
         ${activeTab === "exam" ? this.renderCkadActiveExamTab() : ""}
         ${activeTab === "sets" ? this.renderCkadSetsAndTopicsTab() : ""}
         ${activeTab === "analytics" ? this.renderCkadAnalyticsTab() : ""}
+        ${this.renderCkadAiGeneratorModal()}
       </div>
     `;
   }
@@ -3625,13 +4386,22 @@ class KubeMasteryApp {
                     .join("")}
                 </select>
 
-                <button
-                  type="button"
-                  onclick="window.app.generateNewRandomExamSet(16)"
-                  class="w-full py-2.5 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <span>🎲 Generate Brand-New Randomized Exam Set (16 Tasks • 120 Mins)</span>
-                </button>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onclick="window.app.generateNewRandomExamSet(16)"
+                    class="w-full py-2.5 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>🎲 Randomize Set (16 Tasks)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="window.app.openCkadAiGeneratorModal('set')"
+                    class="w-full py-2.5 px-3 rounded-xl bg-purple-600/25 hover:bg-purple-600/40 border border-purple-400/50 text-purple-200 font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>🤖 AI สร้างข้อสอบชุดใหม่สดๆ</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -3919,6 +4689,12 @@ class KubeMasteryApp {
                 class="px-3 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 text-xs font-bold transition-all cursor-pointer"
                 title="Randomize namespace, pod names &amp; ports for this task">
                 🎲 New Variant
+              </button>
+
+              <button onclick="window.app.openCkadAiGeneratorModal('single')"
+                class="px-3 py-2 rounded-xl bg-purple-600/25 hover:bg-purple-600/40 border border-purple-400/50 text-purple-200 text-xs font-black transition-all cursor-pointer"
+                title="Have AI synthesize a brand-new CKAD task scenario">
+                🤖 AI สร้างโจทย์ใหม่
               </button>
 
               <button
@@ -4305,10 +5081,20 @@ class KubeMasteryApp {
                 เลือกชุดข้อสอบมาตรฐาน หรือกดสุ่มสร้างข้อสอบชุดใหม่ที่เปลี่ยนชื่อ Namespace, พอด, พอร์ต และเงื่อนไขใหม่ทั้งหมดได้ไม่จำกัด
               </p>
             </div>
-            <button onclick="window.app.generateNewRandomExamSet(16)"
-              class="px-4 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-lg shadow-blue-600/25 transition-all cursor-pointer shrink-0">
-              ➕ คลิกสร้างข้อสอบชุดใหม่ (สุ่มโจทย์และพารามิเตอร์ใหม่ทั้งหมด)
-            </button>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <button onclick="window.app.openCkadAiGeneratorModal('single')"
+                class="px-4 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs shadow-lg shadow-purple-600/25 transition-all cursor-pointer">
+                🤖 สั่ง AI สร้างโจทย์ใหม่ตามหัวข้อ
+              </button>
+              <button onclick="window.app.openCkadAiGeneratorModal('set')"
+                class="px-4 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/25 transition-all cursor-pointer">
+                🤖 สั่ง AI สร้างข้อสอบชุดใหม่ (16 ข้อ)
+              </button>
+              <button onclick="window.app.generateNewRandomExamSet(16)"
+                class="px-4 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-lg shadow-blue-600/25 transition-all cursor-pointer">
+                🎲 สุ่มชุดข้อสอบใหม่
+              </button>
+            </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">

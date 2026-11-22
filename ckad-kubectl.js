@@ -23,6 +23,25 @@ const KIND_MAP = {
   deployments: { kind: "Deployment", apiVersion: "apps/v1", plural: "deployments", short: "deployment.apps", namespaced: true },
   "deployment.apps": { kind: "Deployment", apiVersion: "apps/v1", plural: "deployments", short: "deployment.apps", namespaced: true },
 
+  sts: { kind: "StatefulSet", apiVersion: "apps/v1", plural: "statefulsets", short: "statefulset.apps", namespaced: true },
+  statefulset: { kind: "StatefulSet", apiVersion: "apps/v1", plural: "statefulsets", short: "statefulset.apps", namespaced: true },
+  statefulsets: { kind: "StatefulSet", apiVersion: "apps/v1", plural: "statefulsets", short: "statefulset.apps", namespaced: true },
+  "statefulset.apps": { kind: "StatefulSet", apiVersion: "apps/v1", plural: "statefulsets", short: "statefulset.apps", namespaced: true },
+
+  ds: { kind: "DaemonSet", apiVersion: "apps/v1", plural: "daemonsets", short: "daemonset.apps", namespaced: true },
+  daemonset: { kind: "DaemonSet", apiVersion: "apps/v1", plural: "daemonsets", short: "daemonset.apps", namespaced: true },
+  daemonsets: { kind: "DaemonSet", apiVersion: "apps/v1", plural: "daemonsets", short: "daemonset.apps", namespaced: true },
+  "daemonset.apps": { kind: "DaemonSet", apiVersion: "apps/v1", plural: "daemonsets", short: "daemonset.apps", namespaced: true },
+
+  hpa: { kind: "HorizontalPodAutoscaler", apiVersion: "autoscaling/v2", plural: "horizontalpodautoscalers", short: "horizontalpodautoscaler.autoscaling", namespaced: true },
+  horizontalpodautoscaler: { kind: "HorizontalPodAutoscaler", apiVersion: "autoscaling/v2", plural: "horizontalpodautoscalers", short: "horizontalpodautoscaler.autoscaling", namespaced: true },
+  horizontalpodautoscalers: { kind: "HorizontalPodAutoscaler", apiVersion: "autoscaling/v2", plural: "horizontalpodautoscalers", short: "horizontalpodautoscaler.autoscaling", namespaced: true },
+  "horizontalpodautoscaler.autoscaling": { kind: "HorizontalPodAutoscaler", apiVersion: "autoscaling/v2", plural: "horizontalpodautoscalers", short: "horizontalpodautoscaler.autoscaling", namespaced: true },
+
+  limits: { kind: "LimitRange", apiVersion: "v1", plural: "limitranges", short: "limitrange", namespaced: true },
+  limitrange: { kind: "LimitRange", apiVersion: "v1", plural: "limitranges", short: "limitrange", namespaced: true },
+  limitranges: { kind: "LimitRange", apiVersion: "v1", plural: "limitranges", short: "limitrange", namespaced: true },
+
   svc: { kind: "Service", apiVersion: "v1", plural: "services", short: "service", namespaced: true },
   service: { kind: "Service", apiVersion: "v1", plural: "services", short: "service", namespaced: true },
   services: { kind: "Service", apiVersion: "v1", plural: "services", short: "service", namespaced: true },
@@ -291,8 +310,8 @@ function upsertResource(state, doc, defaultNs) {
     doc.metadata.creationTimestamp = new Date().toISOString();
   }
 
-  // Default healthy status for Pods/PV/PVC/Deployment
-  if (doc.kind === "Pod" && !doc.status) {
+  // Default healthy status for Pods/PV/PVC/Deployment/HPA
+  if (doc.kind === "Pod") {
     const firstCmd = [...(doc.spec?.containers?.[0]?.command || []), ...(doc.spec?.containers?.[0]?.args || [])].join(" ");
     const hasBadCmd = /\b(sllep|echho|daate)\b/.test(firstCmd);
     doc.status = hasBadCmd
@@ -319,8 +338,30 @@ function upsertResource(state, doc, defaultNs) {
         };
   } else if (doc.kind === "PersistentVolume" && !doc.status) {
     doc.status = { phase: "Available" };
-  } else if (doc.kind === "PersistentVolumeClaim" && !doc.status) {
+  } else if (doc.kind === "PersistentVolumeClaim") {
     doc.status = { phase: "Bound" };
+  } else if (doc.kind === "HorizontalPodAutoscaler") {
+    if (!doc.spec) doc.spec = {};
+    if (doc.spec.targetCPUUtilizationPercentage !== undefined && !Array.isArray(doc.spec.metrics)) {
+      doc.spec.metrics = [
+        {
+          type: "Resource",
+          resource: {
+            name: "cpu",
+            target: {
+              type: "Utilization",
+              averageUtilization: Number(doc.spec.targetCPUUtilizationPercentage)
+            }
+          }
+        }
+      ];
+    } else if (
+      Array.isArray(doc.spec.metrics) &&
+      doc.spec.metrics[0]?.resource?.target?.averageUtilization !== undefined &&
+      doc.spec.targetCPUUtilizationPercentage === undefined
+    ) {
+      doc.spec.targetCPUUtilizationPercentage = Number(doc.spec.metrics[0].resource.target.averageUtilization);
+    }
   } else if (doc.kind === "Deployment") {
     const img = doc.spec?.template?.spec?.containers?.[0]?.image || "nginx:latest";
     if (!Array.isArray(doc._revisionHistory) || doc._revisionHistory.length === 0) {
@@ -486,7 +527,10 @@ function parseArgs(rawArgv) {
     ingressClass: null,
     rules: [],
     container: null,
-    toRevision: null
+    toRevision: null,
+    min: null,
+    max: null,
+    cpuPercent: null
   };
   const positionals = [];
 
@@ -619,6 +663,18 @@ function parseArgs(rawArgv) {
       flags.toRevision = Number(arg.slice("--to-revision=".length));
     } else if (arg === "--to-revision") {
       flags.toRevision = Number(next());
+    } else if (arg.startsWith("--min=")) {
+      flags.min = Number(arg.slice("--min=".length));
+    } else if (arg === "--min") {
+      flags.min = Number(next());
+    } else if (arg.startsWith("--max=")) {
+      flags.max = Number(arg.slice("--max=".length));
+    } else if (arg === "--max") {
+      flags.max = Number(next());
+    } else if (arg.startsWith("--cpu-percent=")) {
+      flags.cpuPercent = Number(arg.slice("--cpu-percent=".length));
+    } else if (arg === "--cpu-percent") {
+      flags.cpuPercent = Number(next());
     } else if (arg.startsWith("-")) {
       // ignore unknown flags gracefully
     } else {
@@ -738,7 +794,7 @@ function handleGet(state, positionals, flags) {
   const expandedInfos = [];
   for (const t of typeTokens) {
     if (t.toLowerCase() === "all") {
-      for (const k of ["Pod", "Service", "Deployment", "Job", "CronJob"]) {
+      for (const k of ["Pod", "Service", "Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob", "HorizontalPodAutoscaler"]) {
         expandedInfos.push(normalizeKind(k));
       }
     } else {
@@ -822,6 +878,14 @@ function handleGet(state, positionals, flags) {
     if (flags.output === "wide") headers.push("IP", "NODE");
   } else if (singleKind === "Deployment") {
     headers.push("READY", "UP-TO-DATE", "AVAILABLE", "AGE");
+  } else if (singleKind === "StatefulSet") {
+    headers.push("READY", "AGE");
+  } else if (singleKind === "DaemonSet") {
+    headers.push("DESIRED", "CURRENT", "READY", "UP-TO-DATE", "AVAILABLE", "NODE SELECTOR", "AGE");
+  } else if (singleKind === "HorizontalPodAutoscaler") {
+    headers.push("REFERENCE", "TARGETS", "MINPODS", "MAXPODS", "REPLICAS", "AGE");
+  } else if (singleKind === "Job") {
+    headers.push("COMPLETIONS", "DURATION", "AGE");
   } else if (singleKind === "Service") {
     headers.push("TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE");
   } else if (singleKind === "PersistentVolume") {
@@ -864,6 +928,21 @@ function handleGet(state, positionals, flags) {
     } else if (singleKind === "Deployment") {
       const rep = r.spec?.replicas ?? 1;
       row.push(`${rep}/${rep}`, String(rep), String(rep), "3m");
+    } else if (singleKind === "StatefulSet") {
+      const rep = r.spec?.replicas ?? 1;
+      row.push(`${rep}/${rep}`, "3m");
+    } else if (singleKind === "DaemonSet") {
+      row.push("1", "1", "1", "1", "1", formatLabels(r.spec?.template?.spec?.nodeSelector), "3m");
+    } else if (singleKind === "HorizontalPodAutoscaler") {
+      const ref = r.spec?.scaleTargetRef ? `${r.spec.scaleTargetRef.kind}/${r.spec.scaleTargetRef.name}` : "Deployment/app";
+      const cpuTarget =
+        r.spec?.metrics?.[0]?.resource?.target?.averageUtilization ??
+        r.spec?.targetCPUUtilizationPercentage ??
+        80;
+      row.push(ref, `${cpuTarget}%`, String(r.spec?.minReplicas ?? 1), String(r.spec?.maxReplicas ?? 5), String(r.spec?.minReplicas ?? 1), "2m");
+    } else if (singleKind === "Job") {
+      const comp = r.spec?.completions ?? 1;
+      row.push(`${comp}/${comp}`, "4s", "2m");
     } else if (singleKind === "Service") {
       const svcType = r.spec?.type || "ClusterIP";
       const ports = (r.spec?.ports || [])
@@ -1058,6 +1137,29 @@ function handleCreate(state, positionals, flags, execCommand) {
                 ]
               }
             }
+          }
+        }
+      }
+    };
+  } else if (subType === "job") {
+    const name = positionals[1];
+    const cmd = execCommand.length > 0 ? execCommand : positionals.slice(2);
+    doc = {
+      apiVersion: "batch/v1",
+      kind: "Job",
+      metadata: { name, namespace: ns },
+      spec: {
+        template: {
+          metadata: { name },
+          spec: {
+            restartPolicy: flags.restart || "Never",
+            containers: [
+              {
+                name,
+                image: flags.image || "busybox:1.36",
+                ...(cmd.length > 0 ? { command: cmd } : {})
+              }
+            ]
           }
         }
       }
@@ -1313,6 +1415,58 @@ function main() {
       } else if (!flags.ignoreNotFound) {
         console.error(`Error from server (NotFound): ${info.plural} "${name}" not found`);
         process.exit(1);
+      }
+      return;
+    }
+
+    if (cmd === "autoscale") {
+      const { info, name, resource, ns } = findTargetResource(state, rest[0], rest[1], flags.namespace);
+      if (!resource && !flags.dryRun) {
+        console.error(`Error from server (NotFound): ${info.plural} "${name}" not found`);
+        process.exit(1);
+      }
+      const hpaName = flags.name || name;
+      const minReplicas = flags.min !== null && !Number.isNaN(flags.min) ? Number(flags.min) : 1;
+      const maxReplicas = flags.max !== null && !Number.isNaN(flags.max) ? Number(flags.max) : 5;
+      const cpuPercent = flags.cpuPercent !== null && !Number.isNaN(flags.cpuPercent) ? Number(flags.cpuPercent) : 80;
+      const hpaDoc = {
+        apiVersion: "autoscaling/v2",
+        kind: "HorizontalPodAutoscaler",
+        metadata: { name: hpaName, namespace: ns },
+        spec: {
+          scaleTargetRef: {
+            apiVersion: info.apiVersion || "apps/v1",
+            kind: info.kind,
+            name
+          },
+          minReplicas,
+          maxReplicas,
+          metrics: [
+            {
+              type: "Resource",
+              resource: {
+                name: "cpu",
+                target: {
+                  type: "Utilization",
+                  averageUtilization: cpuPercent
+                }
+              }
+            }
+          ],
+          targetCPUUtilizationPercentage: cpuPercent
+        }
+      };
+      if (!flags.dryRun) {
+        upsertResource(state, hpaDoc, ns);
+        saveClusterState(state);
+        if (!flags.output) {
+          console.log(`horizontalpodautoscaler.autoscaling/${hpaName} autoscaled`);
+        }
+      }
+      if (flags.output === "yaml") {
+        process.stdout.write(dumpYaml(hpaDoc));
+      } else if (flags.output === "json") {
+        console.log(JSON.stringify(hpaDoc, null, 2));
       }
       return;
     }

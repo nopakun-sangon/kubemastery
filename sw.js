@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kubemastery-cache-v9';
+const CACHE_NAME = 'kubemastery-cache-v10';
 const ASSETS = [
   "./",
   "./index.html",
@@ -18,6 +18,7 @@ const ASSETS = [
   "./lessons/course-cka.js",
   "./lessons/courseData.js",
   "./data/cliDrillsData.js",
+  "./data/cliTipsData.js",
   "./data/ckadLabsData.js",
   "./docs/concepts/admin-logging-extending.js",
   "./docs/concepts/arch-control-plane-node-comm.js",
